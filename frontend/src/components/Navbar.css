@@ -1,4 +1,3 @@
-
 .navbar {
   height: 76px;
   padding: 0 7%;
@@ -7,6 +6,9 @@
   justify-content: space-between;
   background: #ffffff;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .navbar-logo {
@@ -35,6 +37,7 @@
   text-decoration: none;
   font-size: 15px;
   font-weight: 600;
+  transition: color 0.2s;
 }
 
 .navbar-links a:hover,
@@ -52,36 +55,122 @@
 .register-btn {
   background: #2563eb;
   color: white;
-  padding: 12px 20px;
+  padding: 10px 20px;
   border-radius: 8px;
   text-decoration: none;
   font-weight: 600;
+  transition: background 0.2s;
 }
 
 .register-btn:hover {
   background: #1d4ed8;
 }
 
-@media (max-width: 650px) {
+.user-nav-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dashboard-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #2563eb;
+  background: #eff6ff;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.dashboard-nav-link:hover {
+  background: #dbeafe;
+}
+
+.user-profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.role-tag {
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.role-admin {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.role-owner {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.role-agency {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+.role-customer {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #64748b;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+@media (max-width: 768px) {
   .navbar {
     padding: 0 4%;
   }
 
   .navbar-links {
-    gap: 12px;
+    gap: 14px;
   }
 
-  .navbar-links a,
-  .login-link {
-    font-size: 13px;
+  .user-name {
+    display: none;
   }
 
-  .navbar-actions {
-    gap: 10px;
+  .dashboard-nav-link span {
+    display: none;
   }
 
-  .register-btn {
-    padding: 9px 11px;
-    font-size: 13px;
+  .logout-btn span {
+    display: none;
   }
 }

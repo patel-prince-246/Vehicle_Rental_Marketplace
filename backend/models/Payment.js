@@ -1,8 +1,9 @@
+
 const mongoose = require("mongoose");
 
 const paymentSchema = new mongoose.Schema(
   {
-    paymentId: {
+    paymentid: {
       type: String,
       required: true,
       unique: true,
@@ -27,10 +28,27 @@ const paymentSchema = new mongoose.Schema(
       min: 0
     },
 
-    securityDeposit: {
-      type: Number,
-      default: 0,
-      min: 0
+    paymentMethod: {
+      type: String,
+      enum: ["cash", "card", "upi", "online"],
+      required: true
+    },
+
+    transactionId: {
+      type: String,
+      trim: true,
+      default: null
+    },
+
+    status: {
+      type: String,
+      enum: [
+        "pending",
+        "completed",
+        "failed",
+        "refunded"
+      ],
+      default: "pending"
     },
 
     refundAmount: {
@@ -39,30 +57,31 @@ const paymentSchema = new mongoose.Schema(
       min: 0
     },
 
-    paymentMethod: {
+    refundStatus: {
       type: String,
       enum: [
-        "mock",
-        "razorpay",
-        "cash"
-      ],
-      default: "mock"
-    },
-
-    status: {
-      type: String,
-      enum: [
+        "not_requested",
         "pending",
-        "successful",
-        "failed",
-        "refunded"
+        "completed",
+        "failed"
       ],
-      default: "pending"
+      default: "not_requested"
     },
 
-    transactionId: {
+    refundTransactionId: {
       type: String,
-      trim: true
+      trim: true,
+      default: null
+    },
+
+    paidAt: {
+      type: Date,
+      default: null
+    },
+
+    refundedAt: {
+      type: Date,
+      default: null
     }
   },
   {
@@ -70,4 +89,9 @@ const paymentSchema = new mongoose.Schema(
   }
 );
 
+paymentSchema.path("refundAmount").validate(function (value) {
+  return value <= this.amount;
+}, "Refund amount cannot exceed payment amount");
+
 module.exports = mongoose.model("Payment", paymentSchema);
+

@@ -12,13 +12,17 @@ const vehicleSchema = new mongoose.Schema(
     ownerType: {
       type: String,
       enum: ["owner", "agency"],
-      required: true
+      default: "owner"
     },
 
     ownerId: {
       type: mongoose.Schema.Types.ObjectId,
-      required: true,
       refPath: "ownerType"
+    },
+
+    // Backward compatibility for legacy vehicles created with ownerid
+    ownerid: {
+      type: mongoose.Schema.Types.ObjectId
     },
 
     brand: {
@@ -39,15 +43,18 @@ const vehicleSchema = new mongoose.Schema(
       required: true
     },
 
+    // Backward compatibility for legacy vehicles created with price
+    price: {
+      type: Number
+    },
+
     pricePerDay: {
       type: Number,
-      required: true,
       min: 0
     },
 
     city: {
       type: String,
-      required: true,
       trim: true
     },
 

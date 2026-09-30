@@ -4,67 +4,30 @@ const dotenv = require("dotenv");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
+// Load environment variables
+dotenv.config();
+
 // Database
 const connectDB = require("./config/db");
 
-// Error middleware
-const {
-  notFound,
-  errorHandler
-} = require("./middleware/errorMiddleware");
-
-
-// ==============================
-// LOAD ENVIRONMENT VARIABLES
-// ==============================
-dotenv.config();
-
-
-// ==============================
-// CONNECT DATABASE
-// ==============================
-connectDB();
-
-
-// ==============================
-// CREATE EXPRESS APP
-// ==============================
+// Create Express app
 const app = express();
 
-
-// ==============================
-// SECURITY MIDDLEWARE
-// ==============================
+// Security middleware
 app.use(helmet());
 
-
-// ==============================
 // CORS
-// ==============================
 app.use(
   cors({
     origin: "*"
   })
 );
 
-
-// ==============================
-// JSON BODY PARSER
-// ==============================
+// Body parsers
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-
-// ==============================
-// URL ENCODED DATA
-// ==============================
-app.use(express.urlencoded({
-  extended: true
-}));
-
-
-// ==============================
-// RATE LIMITING
-// ==============================
+// Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -76,10 +39,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-
-// ==============================
-// ROOT ROUTE
-// ==============================
+// Root route
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
@@ -87,76 +47,38 @@ app.get("/", (req, res) => {
   });
 });
 
+// API routes
+app.use("/api/users", require("./routes/userRoutes"));
+app.use("/api/owners", require("./routes/ownerRoutes"));
+app.use("/api/agencies", require("./routes/agencyRoutes"));
+app.use("/api/admin", require("./routes/adminRoutes"));
+app.use("/api/vehicles", require("./routes/vehicleRoutes"));
+app.use("/api/bookings", require("./routes/bookingRoutes"));
+app.use("/api/payments", require("./routes/paymentRoutes"));
+app.use("/api/reviews", require("./routes/reviewRoutes"));
+app.use("/api/notifications", require("./routes/notificationRoutes"));
 
-// ==============================
-// API ROUTES
-// ==============================
+// 404 handler
+app.use(require("./middleware/errorMiddleware").notFound);
 
-app.use(
-  "/api/users",
-  require("./routes/userRoutes")
-);
+// Global error handler
+app.use(require("./middleware/errorMiddleware").errorHandler);
 
-app.use(
-  "/api/owners",
-  require("./routes/ownerRoutes")
-);
-
-app.use(
-  "/api/agencies",
-  require("./routes/agencyRoutes")
-);
-
-app.use(
-  "/api/admin",
-  require("./routes/adminRoutes")
-);
-
-app.use(
-  "/api/vehicles",
-  require("./routes/vehicleRoutes")
-);
-
-app.use(
-  "/api/bookings",
-  require("./routes/bookingRoutes")
-);
-
-app.use(
-  "/api/payments",
-  require("./routes/paymentRoutes")
-);
-
-app.use(
-  "/api/reviews",
-  require("./routes/reviewRoutes")
-);
-
-app.use(
-  "/api/notifications",
-  require("./routes/notificationRoutes")
-);
-
-
-// ==============================
-// 404 HANDLER
-// ==============================
-app.use(notFound);
-
-
-// ==============================
-// GLOBAL ERROR HANDLER
-// ==============================
-app.use(errorHandler);
-
-
-// ==============================
-// START SERVER
-// ==============================
+// Start server after database connection
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(
-    `Server running on http://localhost:${PORT}`
-  );
-});
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    app.listen(PORT, () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error.message);
+    process.exit(1);
+  }
+};
+
+startServer();
+

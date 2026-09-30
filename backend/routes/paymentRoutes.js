@@ -1,20 +1,20 @@
 const express = require("express");
+const router = express.Router();
 
 const {
   createPayment,
   getMyPayments,
+  getAllPayments,
   getPaymentById,
-  refundPayment,
-  getAllPayments
+  updatePaymentStatus,
+  requestRefund,
+  processRefund
 } = require("../controllers/paymentController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
 
-const router = express.Router();
-
-
-// Create payment
+// Customer: create payment
 router.post(
   "/",
   authMiddleware,
@@ -22,8 +22,7 @@ router.post(
   createPayment
 );
 
-
-// My payments
+// Customer: view own payments
 router.get(
   "/my",
   authMiddleware,
@@ -31,26 +30,7 @@ router.get(
   getMyPayments
 );
 
-
-// Get payment
-router.get(
-  "/:id",
-  authMiddleware,
-  roleMiddleware("customer", "admin"),
-  getPaymentById
-);
-
-
-// Refund payment
-router.patch(
-  "/:id/refund",
-  authMiddleware,
-  roleMiddleware("admin"),
-  refundPayment
-);
-
-
-// All payments
+// Admin: view all payments
 router.get(
   "/",
   authMiddleware,
@@ -58,5 +38,36 @@ router.get(
   getAllPayments
 );
 
+// Customer/Admin: view payment details
+router.get(
+  "/:id",
+  authMiddleware,
+  roleMiddleware("customer", "admin"),
+  getPaymentById
+);
+
+// Admin: update payment status
+router.put(
+  "/:id/status",
+  authMiddleware,
+  roleMiddleware("admin"),
+  updatePaymentStatus
+);
+
+// Customer/Admin: request a refund
+router.post(
+  "/:id/refund",
+  authMiddleware,
+  roleMiddleware("customer", "admin"),
+  requestRefund
+);
+
+// Admin: process a refund
+router.put(
+  "/:id/refund/process",
+  authMiddleware,
+  roleMiddleware("admin"),
+  processRefund
+);
 
 module.exports = router;

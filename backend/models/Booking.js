@@ -1,3 +1,4 @@
+
 const mongoose = require("mongoose");
 
 const bookingSchema = new mongoose.Schema(
@@ -28,7 +29,13 @@ const bookingSchema = new mongoose.Schema(
 
     endDate: {
       type: Date,
-      required: true
+      required: true,
+      validate: {
+        validator: function (value) {
+          return value > this.startDate;
+        },
+        message: "End date must be after start date"
+      }
     },
 
     totalAmount: {
@@ -86,5 +93,10 @@ const bookingSchema = new mongoose.Schema(
     timestamps: true
   }
 );
+
+// Validate that the refund does not exceed the total
+bookingSchema.path("refundAmount").validate(function (value) {
+  return value <= this.totalAmount + this.securityDeposit;
+}, "Refund amount cannot exceed the total amount and security deposit");
 
 module.exports = mongoose.model("Booking", bookingSchema);

@@ -124,6 +124,80 @@
   text-align: center;
 }
 
+.login-error-alert {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.demo-accounts-box {
+  margin-top: 24px;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+}
+
+.demo-title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.demo-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.demo-badge-btn {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  text-align: left;
+  transition: all 0.2s;
+}
+
+.demo-badge-btn.admin {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.demo-badge-btn.admin:hover {
+  background: #fecaca;
+}
+
+.demo-badge-btn.owner {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.demo-badge-btn.owner:hover {
+  background: #fde68a;
+}
+
+.demo-badge-btn.customer {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.demo-badge-btn.customer:hover {
+  background: #bbf7d0;
+}
+
 @media (max-width: 480px) {
   .login-card {
     padding: 25px 20px;

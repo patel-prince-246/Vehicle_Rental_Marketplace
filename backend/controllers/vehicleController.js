@@ -1,17 +1,66 @@
+const mongoose = require("mongoose");
 const Vehicle = require("../models/Vehicle");
 const Owner = require("../models/Owner");
 const Agency = require("../models/Agency");
+const Booking = require("../models/Booking");
 
+// Get owner or agency profile for a vehicle
+const getVehicleOwner = async (vehicle) => {
+  const ownerType = vehicle.ownerType || "owner";
+  const ownerId =
+    vehicle.ownerId ||
+    vehicle.ownerid ||
+    (vehicle._doc && vehicle._doc.ownerid);
 
-// ==============================
+  if (!ownerId) {
+    return null;
+  }
+
+  if (ownerType === "owner") {
+    return Owner.findById(ownerId)
+      .select("name email phone city");
+  }
+
+  if (ownerType === "agency") {
+    return Agency.findById(ownerId)
+      .select("agencyName ownerName email phone city");
+  }
+
+  return null;
+};
+
+// Attach owner details without using refPath populate
+const addOwnerDetails = async (vehicle) => {
+  const owner = await getVehicleOwner(vehicle);
+  const vehicleObj = vehicle.toObject ? vehicle.toObject() : { ...vehicle };
+
+  // Harmonize price / pricePerDay for backward compatibility
+  const priceValue =
+    vehicleObj.pricePerDay ??
+    vehicleObj.price ??
+    (vehicle._doc && vehicle._doc.price);
+
+  if (priceValue !== undefined) {
+    vehicleObj.pricePerDay = priceValue;
+    vehicleObj.price = priceValue;
+  }
+
+  // Fallback for city if missing on legacy vehicle
+  if (!vehicleObj.city && owner?.city) {
+    vehicleObj.city = owner.city;
+  }
+
+  return {
+    ...vehicleObj,
+    owner
+  };
+};
+
 // CREATE VEHICLE
-// ==============================
 const createVehicle = async (req, res) => {
   try {
     const {
       vehicleid,
-      ownerType,
-      ownerId,
       brand,
       model,
       type,
@@ -23,17 +72,14 @@ const createVehicle = async (req, res) => {
       description
     } = req.body;
 
-    // Required fields
     if (
       !vehicleid ||
-      !ownerType ||
-      !ownerId ||
       !brand ||
       !model ||
       !type ||
       pricePerDay === undefined ||
       !city ||
-      !year
+      year === undefined
     ) {
       return res.status(400).json({
         success: false,
@@ -41,154 +87,206 @@ const createVehicle = async (req, res) => {
       });
     }
 
-    // Check owner type
-    if (!["Owner", "Agency"].includes(ownerType)) {
+    const price = Number(pricePerDay);
+    const vehicleYear = Number(year);
+
+    if (!Number.isFinite(price) || price < 0) {
       return res.status(400).json({
         success: false,
-        message: "ownerType must be Owner or Agency"
+        message: "Price per day must be a valid non-negative number"
       });
     }
 
-    // Verify owner/agency exists
-    let vehicleOwner;
-
-    if (ownerType === "Owner") {
-      vehicleOwner = await Owner.findById(ownerId);
-    } else {
-      vehicleOwner = await Agency.findById(ownerId);
+    if (
+      !Number.isInteger(vehicleYear) ||
+      vehicleYear < 1900
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a valid vehicle year"
+      });
     }
 
-    if (!vehicleOwner) {
+    let ownerType;
+    let ownerProfile;
+
+    if (req.user.role === "owner") {
+      ownerType = "owner";
+      ownerProfile = await Owner.findOne({
+        userId: req.user.id
+      });
+    } else if (req.user.role === "agency") {
+      ownerType = "agency";
+      ownerProfile = await Agency.findOne({
+        userId: req.user.id
+      });
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: "Only owners and agencies can add vehicles"
+      });
+    }
+
+    if (!ownerProfile) {
       return res.status(404).json({
         success: false,
-        message: `${ownerType} not found`
+        message: "Owner or agency profile not found"
       });
     }
 
-    // Check duplicate vehicle ID
     const existingVehicle = await Vehicle.findOne({
-      vehicleid
+      vehicleid: vehicleid.trim()
     });
 
     if (existingVehicle) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: "Vehicle ID already exists"
       });
     }
 
     const vehicle = await Vehicle.create({
-      vehicleid,
+      vehicleid: vehicleid.trim(),
       ownerType,
-      ownerId,
+      ownerId: ownerProfile._id,
       brand,
       model,
       type,
-      pricePerDay,
+      pricePerDay: price,
       city,
-      year,
+      year: vehicleYear,
       registrationNumber,
       imageUrl,
-      description
+      description,
+      status: "available",
+      verificationStatus: "pending"
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       message: "Vehicle created successfully",
-      vehicle
+      vehicle: await addOwnerDetails(vehicle)
     });
-
   } catch (error) {
     console.error("Create Vehicle Error:", error);
 
-    res.status(500).json({
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Vehicle ID already exists"
+      });
+    }
+
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
-
-// ==============================
 // GET ALL VEHICLES
-// ==============================
+// PUBLIC SEARCH
 const getAllVehicles = async (req, res) => {
   try {
-    const {
-      type,
-      city,
-      minPrice,
-      maxPrice,
-      status,
-      verificationStatus
-    } = req.query;
+    const { type, city, minPrice, maxPrice } = req.query;
 
-    const filter = {};
+    const filter = {
+      status: "available"
+    };
+
+    if (req.query.verificationStatus) {
+      filter.verificationStatus = req.query.verificationStatus;
+    } else {
+      filter.$or = [
+        { verificationStatus: "verified" },
+        { verificationStatus: { $exists: false } }
+      ];
+    }
 
     if (type) {
       filter.type = type;
     }
 
     if (city) {
+      const safeCity = city.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
       filter.city = {
-        $regex: city,
+        $regex: safeCity,
         $options: "i"
       };
     }
 
-    if (status) {
-      filter.status = status;
-    }
-
-    if (verificationStatus) {
-      filter.verificationStatus =
-        verificationStatus;
-    }
-
     if (minPrice !== undefined || maxPrice !== undefined) {
-      filter.pricePerDay = {};
+      const min =
+        minPrice === undefined ? undefined : Number(minPrice);
+      const max =
+        maxPrice === undefined ? undefined : Number(maxPrice);
 
-      if (minPrice !== undefined) {
-        filter.pricePerDay.$gte =
-          Number(minPrice);
+      if (
+        (min !== undefined && (!Number.isFinite(min) || min < 0)) ||
+        (max !== undefined && (!Number.isFinite(max) || max < 0)) ||
+        (min !== undefined && max !== undefined && min > max)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid price range"
+        });
       }
 
-      if (maxPrice !== undefined) {
-        filter.pricePerDay.$lte =
-          Number(maxPrice);
+      filter.pricePerDay = {};
+
+      if (min !== undefined) {
+        filter.pricePerDay.$gte = min;
+      }
+
+      if (max !== undefined) {
+        filter.pricePerDay.$lte = max;
       }
     }
 
     const vehicles = await Vehicle.find(filter)
-      .populate("ownerId");
+      .sort({ createdAt: -1 });
 
-    res.status(200).json({
+    const vehiclesWithOwners = await Promise.all(
+      vehicles.map(addOwnerDetails)
+    );
+
+    return res.status(200).json({
       success: true,
-      count: vehicles.length,
-      vehicles
+      count: vehiclesWithOwners.length,
+      vehicles: vehiclesWithOwners
     });
-
   } catch (error) {
     console.error("Get Vehicles Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
-
-// ==============================
 // GET VEHICLE BY ID
-// ==============================
 const getVehicleById = async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(
-      req.params.id
-    ).populate("ownerId");
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID"
+      });
+    }
+
+    const vehicle = await Vehicle.findById(req.params.id);
 
     if (!vehicle) {
       return res.status(404).json({
@@ -197,28 +295,94 @@ const getVehicleById = async (req, res) => {
       });
     }
 
-    res.status(200).json({
-      success: true,
-      vehicle
-    });
+    if (
+      vehicle.status !== "available" ||
+      (vehicle.verificationStatus && vehicle.verificationStatus === "rejected")
+    ) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle is not available"
+      });
+    }
 
+    return res.status(200).json({
+      success: true,
+      vehicle: await addOwnerDetails(vehicle)
+    });
   } catch (error) {
     console.error("Get Vehicle Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
+// CHECK VEHICLE ACCESS
+const checkVehicleAccess = async (vehicle, user) => {
+  if (user.role === "admin") {
+    return true;
+  }
 
-// ==============================
+  let ownerType;
+  let profile;
+
+  if (user.role === "owner") {
+    ownerType = "owner";
+    profile = await Owner.findOne({
+      userId: user.id
+    });
+  } else if (user.role === "agency") {
+    ownerType = "agency";
+    profile = await Agency.findOne({
+      userId: user.id
+    });
+  } else {
+    return false;
+  }
+
+  if (!profile) {
+    return false;
+  }
+
+  return (
+    vehicle.ownerType === ownerType &&
+    vehicle.ownerId.toString() === profile._id.toString()
+  );
+};
+
 // UPDATE VEHICLE
-// ==============================
 const updateVehicle = async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID"
+      });
+    }
+
+    const vehicle = await Vehicle.findById(req.params.id);
+
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: "Vehicle not found"
+      });
+    }
+
+    const hasAccess = await checkVehicleAccess(
+      vehicle,
+      req.user
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "You can update only your own vehicle"
+      });
+    }
+
     const {
       brand,
       model,
@@ -232,80 +396,62 @@ const updateVehicle = async (req, res) => {
       status
     } = req.body;
 
-    const vehicle = await Vehicle.findById(
-      req.params.id
-    );
-
-    if (!vehicle) {
-      return res.status(404).json({
+    if (
+      req.user.role !== "admin" &&
+      status !== undefined
+    ) {
+      return res.status(403).json({
         success: false,
-        message: "Vehicle not found"
+        message: "Vehicle status is managed by the system"
       });
     }
 
-    // Only owner/agency who owns the vehicle
-    // or admin can update it.
-    if (req.user.role !== "admin") {
-
-      let profile;
-
-      if (req.user.role === "owner") {
-        profile = await Owner.findOne({
-          userId: req.user.id
-        });
-      }
-
-      if (req.user.role === "agency") {
-        profile = await Agency.findOne({
-          userId: req.user.id
-        });
-      }
-
-      if (!profile) {
-        return res.status(403).json({
-          success: false,
-          message: "Owner profile not found"
-        });
-      }
-
-      if (
-        vehicle.ownerId.toString() !==
-        profile._id.toString()
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "You can update only your own vehicle"
-        });
-      }
-    }
-
-    if (brand !== undefined) {
-      vehicle.brand = brand;
-    }
-
-    if (model !== undefined) {
-      vehicle.model = model;
-    }
-
-    if (type !== undefined) {
-      vehicle.type = type;
+    if (
+      req.user.role !== "admin" &&
+      req.body.verificationStatus !== undefined
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can change verification status"
+      });
     }
 
     if (pricePerDay !== undefined) {
-      vehicle.pricePerDay = pricePerDay;
-    }
+      const price = Number(pricePerDay);
 
-    if (city !== undefined) {
-      vehicle.city = city;
+      if (!Number.isFinite(price) || price < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Price must be a valid non-negative number"
+        });
+      }
+
+      vehicle.pricePerDay = price;
     }
 
     if (year !== undefined) {
-      vehicle.year = year;
+      const vehicleYear = Number(year);
+
+      if (
+        !Number.isInteger(vehicleYear) ||
+        vehicleYear < 1900
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "Please provide a valid vehicle year"
+        });
+      }
+
+      vehicle.year = vehicleYear;
     }
 
+    if (brand !== undefined) vehicle.brand = brand;
+    if (model !== undefined) vehicle.model = model;
+    if (type !== undefined) vehicle.type = type;
+    if (city !== undefined) vehicle.city = city;
+
     if (registrationNumber !== undefined) {
-      vehicle.registrationNumber =
-        registrationNumber;
+      vehicle.registrationNumber = registrationNumber;
     }
 
     if (imageUrl !== undefined) {
@@ -316,38 +462,45 @@ const updateVehicle = async (req, res) => {
       vehicle.description = description;
     }
 
-    if (status !== undefined) {
+    if (req.user.role === "admin" && status !== undefined) {
       vehicle.status = status;
     }
 
     await vehicle.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Vehicle updated successfully",
-      vehicle
+      vehicle: await addOwnerDetails(vehicle)
     });
-
   } catch (error) {
     console.error("Update Vehicle Error:", error);
 
-    res.status(500).json({
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
-
-// ==============================
 // DELETE VEHICLE
-// ==============================
 const deleteVehicle = async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(
-      req.params.id
-    );
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID"
+      });
+    }
+
+    const vehicle = await Vehicle.findById(req.params.id);
 
     if (!vehicle) {
       return res.status(404).json({
@@ -356,83 +509,68 @@ const deleteVehicle = async (req, res) => {
       });
     }
 
-    // Admin can delete any vehicle
-    if (req.user.role !== "admin") {
-
-      let profile;
-
-      if (req.user.role === "owner") {
-        profile = await Owner.findOne({
-          userId: req.user.id
-        });
-      }
-
-      if (req.user.role === "agency") {
-        profile = await Agency.findOne({
-          userId: req.user.id
-        });
-      }
-
-      if (!profile) {
-        return res.status(403).json({
-          success: false,
-          message: "Owner profile not found"
-        });
-      }
-
-      if (
-        vehicle.ownerId.toString() !==
-        profile._id.toString()
-      ) {
-        return res.status(403).json({
-          success: false,
-          message: "You can delete only your own vehicle"
-        });
-      }
-    }
-
-    await Vehicle.findByIdAndDelete(
-      req.params.id
+    const hasAccess = await checkVehicleAccess(
+      vehicle,
+      req.user
     );
 
-    res.status(200).json({
+    if (!hasAccess) {
+      return res.status(403).json({
+        success: false,
+        message: "You can delete only your own vehicle"
+      });
+    }
+
+    const activeBooking = await Booking.findOne({
+      vehicleId: vehicle._id,
+      status: {
+        $in: ["pending", "confirmed", "ongoing"]
+      }
+    });
+
+    if (activeBooking) {
+      return res.status(400).json({
+        success: false,
+        message: "Vehicle cannot be deleted while it has active bookings"
+      });
+    }
+
+    await Vehicle.findByIdAndDelete(vehicle._id);
+
+    return res.status(200).json({
       success: true,
       message: "Vehicle deleted successfully"
     });
-
   } catch (error) {
     console.error("Delete Vehicle Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
-
-// ==============================
 // GET MY VEHICLES
-// ==============================
 const getMyVehicles = async (req, res) => {
   try {
     let ownerType;
     let ownerProfile;
 
     if (req.user.role === "owner") {
-      ownerType = "Owner";
-
+      ownerType = "owner";
       ownerProfile = await Owner.findOne({
         userId: req.user.id
       });
-    }
-
-    if (req.user.role === "agency") {
-      ownerType = "Agency";
-
+    } else if (req.user.role === "agency") {
+      ownerType = "agency";
       ownerProfile = await Agency.findOne({
         userId: req.user.id
+      });
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: "Only owners and agencies can view their vehicles"
       });
     }
 
@@ -446,34 +584,38 @@ const getMyVehicles = async (req, res) => {
     const vehicles = await Vehicle.find({
       ownerType,
       ownerId: ownerProfile._id
-    });
+    }).sort({ createdAt: -1 });
 
-    res.status(200).json({
+    const vehiclesWithOwners = await Promise.all(
+      vehicles.map(addOwnerDetails)
+    );
+
+    return res.status(200).json({
       success: true,
-      count: vehicles.length,
-      vehicles
+      count: vehiclesWithOwners.length,
+      vehicles: vehiclesWithOwners
     });
-
   } catch (error) {
     console.error("Get My Vehicles Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
-
-// ==============================
 // VERIFY VEHICLE
-// ==============================
 const verifyVehicle = async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(
-      req.params.id
-    );
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID"
+      });
+    }
+
+    const vehicle = await Vehicle.findById(req.params.id);
 
     if (!vehicle) {
       return res.status(404).json({
@@ -483,35 +625,34 @@ const verifyVehicle = async (req, res) => {
     }
 
     vehicle.verificationStatus = "verified";
-
     await vehicle.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Vehicle verified successfully",
       vehicle
     });
-
   } catch (error) {
     console.error("Verify Vehicle Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
 
-
-// ==============================
 // REJECT VEHICLE
-// ==============================
 const rejectVehicle = async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(
-      req.params.id
-    );
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid vehicle ID"
+      });
+    }
+
+    const vehicle = await Vehicle.findById(req.params.id);
 
     if (!vehicle) {
       return res.status(404).json({
@@ -521,26 +662,22 @@ const rejectVehicle = async (req, res) => {
     }
 
     vehicle.verificationStatus = "rejected";
-
     await vehicle.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Vehicle verification rejected",
       vehicle
     });
-
   } catch (error) {
     console.error("Reject Vehicle Error:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
-
 
 module.exports = {
   createVehicle,

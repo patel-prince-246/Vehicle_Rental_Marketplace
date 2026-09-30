@@ -1,64 +1,93 @@
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Search, SlidersHorizontal, MapPin } from "lucide-react";
 import Navbar from "../components/Navbar";
+import api from "../services/api";
 import "./Vehicles.css";
 
-const sampleVehicles = [
-  {
-    id: 1,
-    brand: "Honda",
-    model: "City",
-    type: "Car",
-    city: "Nadiad",
-    pricePerDay: 1800,
-    image: "https://placehold.co/600x350?text=Honda+City",
-  },
-  {
-    id: 2,
-    brand: "Royal Enfield",
-    model: "Classic 350",
-    type: "Bike",
-    city: "Nadiad",
-    pricePerDay: 900,
-    image: "https://placehold.co/600x350?text=Classic+350",
-  },
-  {
-    id: 3,
-    brand: "Honda",
-    model: "Activa",
-    type: "Scooter",
-    city: "Nadiad",
-    pricePerDay: 500,
-    image: "https://placehold.co/600x350?text=Honda+Activa",
-  },
-];
-
 function Vehicles() {
+  const [vehicles, setVehicles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
   const [search, setSearch] = useState("");
   const [type, setType] = useState("All");
   const [maxPrice, setMaxPrice] = useState("");
   const [sort, setSort] = useState("default");
 
-  let filteredVehicles = sampleVehicles.filter((vehicle) => {
-    const matchesSearch =
-      `${vehicle.brand} ${vehicle.model}`
-        .toLowerCase()
-        .includes(search.toLowerCase());
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-    const matchesType = type === "All" || vehicle.type === type;
-    const matchesPrice =
-      maxPrice === "" || vehicle.pricePerDay <= Number(maxPrice);
+        const response = await api.get("/vehicles");
 
-    return matchesSearch && matchesType && matchesPrice;
-  });
+        // Support common API response formats.
+        const data = response.data;
+        const vehicleList = Array.isArray(data)
+          ? data
+          : data.vehicles || data.data || [];
 
-  if (sort === "low") {
-    filteredVehicles.sort((a, b) => a.pricePerDay - b.pricePerDay);
-  } else if (sort === "high") {
-    filteredVehicles.sort((a, b) => b.pricePerDay - a.pricePerDay);
-  }
+        setVehicles(vehicleList);
+      } catch (err) {
+        console.error("Error fetching vehicles:", err);
+        setError(
+          err.response?.data?.message ||
+            "Unable to load vehicles. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchVehicles();
+  }, []);
+
+  const getVehicleType = (vehicle) =>
+    vehicle.type || vehicle.vehicleType || "Other";
+
+  const getVehiclePrice = (vehicle) =>
+    Number(vehicle.pricePerDay ?? vehicle.rentPerDay ?? vehicle.price ?? 0);
+
+  const getVehicleImage = (vehicle) => {
+    if (Array.isArray(vehicle.images) && vehicle.images.length > 0) {
+      return vehicle.images[0];
+    }
+
+    return (
+      vehicle.image ||
+      vehicle.images?.[0]?.url ||
+      "https://placehold.co/600x350?text=Vehicle"
+    );
+  };
+
+  const filteredVehicles = vehicles
+    .filter((vehicle) => {
+      const brand = vehicle.brand || "";
+      const model = vehicle.model || vehicle.name || "";
+      const searchText = `${brand} ${model}`.toLowerCase();
+
+      const matchesSearch = searchText.includes(search.toLowerCase());
+      const matchesType =
+        type === "All" || getVehicleType(vehicle) === type;
+      const matchesPrice =
+        maxPrice === "" || getVehiclePrice(vehicle) <= Number(maxPrice);
+
+      return matchesSearch && matchesType && matchesPrice;
+    })
+    .sort((a, b) => {
+      if (sort === "low") {
+        return getVehiclePrice(a) - getVehiclePrice(b);
+      }
+
+      if (sort === "high") {
+        return getVehiclePrice(b) - getVehiclePrice(a);
+      }
+
+      return 0;
+    });
 
   return (
     <>
@@ -82,7 +111,10 @@ function Vehicles() {
             />
           </div>
 
-          <select value={type} onChange={(e) => setType(e.target.value)}>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+          >
             <option value="All">All vehicle types</option>
             <option value="Car">Cars</option>
             <option value="Bike">Bikes</option>
@@ -99,7 +131,10 @@ function Vehicles() {
             onChange={(e) => setMaxPrice(e.target.value)}
           />
 
-          <select value={sort} onChange={(e) => setSort(e.target.value)}>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+          >
             <option value="default">Sort by: Default</option>
             <option value="low">Price: Low to High</option>
             <option value="high">Price: High to Low</option>
@@ -111,7 +146,19 @@ function Vehicles() {
           <span>{filteredVehicles.length} vehicles found</span>
         </div>
 
-        {filteredVehicles.length === 0 ? (
+        {loading ? (
+          <div className="no-vehicles">
+            <p>Loading vehicles...</p>
+          </div>
+        ) : error ? (
+          <div className="no-vehicles">
+            <h3>Something went wrong</h3>
+            <p>{error}</p>
+            <button onClick={() => window.location.reload()}>
+              Retry
+            </button>
+          </div>
+        ) : filteredVehicles.length === 0 ? (
           <div className="no-vehicles">
             <SlidersHorizontal size={36} />
             <h3>No vehicles found</h3>
@@ -120,24 +167,43 @@ function Vehicles() {
         ) : (
           <section className="vehicle-grid">
             {filteredVehicles.map((vehicle) => (
-              <article className="vehicle-card" key={vehicle.id}>
-                <img src={vehicle.image} alt={`${vehicle.brand} ${vehicle.model}`} />
+              <article
+                className="vehicle-card"
+                key={vehicle._id || vehicle.id}
+              >
+                <img
+                  src={getVehicleImage(vehicle)}
+                  alt={`${vehicle.brand || ""} ${
+                    vehicle.model || vehicle.name || "Vehicle"
+                  }`}
+                />
 
                 <div className="vehicle-card-content">
-                  <span className="vehicle-type">{vehicle.type}</span>
-                  <h3>{vehicle.brand} {vehicle.model}</h3>
+                  <span className="vehicle-type">
+                    {getVehicleType(vehicle)}
+                  </span>
+
+                  <h3>
+                    {vehicle.brand}{" "}
+                    {vehicle.model || vehicle.name}
+                  </h3>
 
                   <p className="vehicle-location">
                     <MapPin size={16} />
-                    {vehicle.city}
+                    {vehicle.city || vehicle.location || "Location unavailable"}
                   </p>
 
                   <div className="vehicle-card-footer">
                     <p>
-                      <strong>₹{vehicle.pricePerDay}</strong>
+                      <strong>₹{getVehiclePrice(vehicle)}</strong>
                       <span> / day</span>
                     </p>
-                    <Link to={`/vehicles/${vehicle.id}`}>View Details</Link>
+
+                    <Link
+                      to={`/vehicles/${vehicle._id || vehicle.id}`}
+                    >
+                      View Details
+                    </Link>
                   </div>
                 </div>
               </article>
