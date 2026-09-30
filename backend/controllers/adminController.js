@@ -520,6 +520,142 @@ const getDashboardStats = async (req, res) => {
 };
 
 
+// ==============================
+// GET ALL LICENSES / PENDING QUEUE
+// ==============================
+const getAllLicenses = async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = { "license.status": { $ne: "not_uploaded" } };
+    if (status) {
+      filter["license.status"] = status;
+    }
+
+    const users = await User.find(filter)
+      .select("name email phone city role license createdAt")
+      .sort({ updatedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: users.length,
+      licenses: users,
+    });
+  } catch (error) {
+    console.error("Get Licenses Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+
+// ==============================
+// VERIFY LICENSE
+// ==============================
+const verifyLicense = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    user.license.status = "verified";
+    await user.save();
+
+    // Create notification
+    try {
+      const Notification = require("../models/Notification");
+      await Notification.create({
+        userId: user._id,
+        type: "license_verified",
+        message: "Congratulations! Your driving license has been approved by the admin.",
+      });
+    } catch (nErr) {
+      console.warn("Notification error:", nErr.message);
+    }
+
+    // Send email notification
+    try {
+      const { sendLicenseStatusUpdate } = require("../services/emailService");
+      await sendLicenseStatusUpdate(user, "verified");
+    } catch (eErr) {
+      console.warn("Email error:", eErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Driving license verified successfully",
+      license: user.license,
+    });
+  } catch (error) {
+    console.error("Verify License Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+
+// ==============================
+// REJECT LICENSE
+// ==============================
+const rejectLicense = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    user.license.status = "rejected";
+    await user.save();
+
+    // Create notification
+    try {
+      const Notification = require("../models/Notification");
+      await Notification.create({
+        userId: user._id,
+        type: "license_rejected",
+        message: `Your driving license was rejected. Reason: ${reason || "Document details could not be validated."}`,
+      });
+    } catch (nErr) {
+      console.warn("Notification error:", nErr.message);
+    }
+
+    // Send email notification
+    try {
+      const { sendLicenseStatusUpdate } = require("../services/emailService");
+      await sendLicenseStatusUpdate(user, "rejected", reason);
+    } catch (eErr) {
+      console.warn("Email error:", eErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Driving license rejected",
+      license: user.license,
+    });
+  } catch (error) {
+    console.error("Reject License Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -540,5 +676,9 @@ module.exports = {
   getAllPayments,
   getAllReviews,
 
+  getAllLicenses,
+  verifyLicense,
+  rejectLicense,
+
   getDashboardStats
-};
+};

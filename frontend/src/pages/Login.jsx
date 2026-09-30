@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
-import { Eye, EyeOff, Car, AlertCircle } from "lucide-react";
+import { Eye, EyeOff, Car, AlertCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import "./Login.css";
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -16,7 +15,6 @@ function Login() {
   const location = useLocation();
 
   const redirectAfterLogin = (user) => {
-    // If there was an intended destination, redirect there
     if (location.state?.from) {
       navigate(location.state.from);
       return;
@@ -60,93 +58,120 @@ function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <Link to="/" className="login-brand">
-          <Car size={30} />
-          <span>RentWheels</span>
+    <div className="min-h-screen bg-slate-100 flex flex-col justify-center items-center p-4 sm:p-6">
+      <div className="bg-white w-full max-w-md rounded-3xl border border-slate-200/90 p-8 sm:p-10 shadow-lg shadow-slate-200/50">
+        {/* Brand */}
+        <Link to="/" className="inline-flex items-center gap-2 text-xl font-bold text-slate-900 mb-6">
+          <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20">
+            <Car size={20} />
+          </div>
+          <span>Rent<span className="text-blue-600">Wheels</span></span>
         </Link>
 
-        <h1>Welcome Back</h1>
-        <p className="login-subtitle">Login to continue to your account</p>
+        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Welcome Back</h1>
+        <p className="text-sm text-slate-500 mt-1 mb-6">Log in to manage your bookings and fleet.</p>
 
         {error && (
-          <div className="login-error-alert">
-            <AlertCircle size={18} />
+          <div className="flex items-center gap-2.5 bg-red-50 border border-red-200 text-red-700 px-3.5 py-2.5 rounded-xl text-xs font-medium mb-6">
+            <AlertCircle size={16} className="shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          <label htmlFor="email">Email Address</label>
-          <input
-            id="email"
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-
-          <label htmlFor="password">Password</label>
-          <div className="password-input">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="email">
+              Email Address
+            </label>
             <input
-              id="password"
-              type={showPassword ? "text" : "password"}
-              placeholder="Enter your password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              id="email"
+              type="email"
+              placeholder="name@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white transition-colors"
             />
-            <button
-              type="button"
-              className="password-toggle"
-              onClick={() => setShowPassword(!showPassword)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
           </div>
 
-          <button type="submit" className="login-button" disabled={loading}>
-            {loading ? "Logging in..." : "Login"}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1.5" htmlFor="password">
+              Password
+            </label>
+            <div className="relative flex items-center">
+              <input
+                id="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white transition-colors pr-10"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-60"
+          >
+            {loading ? "Logging in..." : "Sign In"}
           </button>
         </form>
 
-        <div className="demo-accounts-box">
-          <p className="demo-title">Quick Demo Login:</p>
-          <div className="demo-buttons">
+        {/* Quick Demo Logins */}
+        <div className="mt-6 pt-6 border-t border-slate-100">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 text-center">
+            Quick Demo Accounts
+          </p>
+          <div className="grid grid-cols-3 gap-2">
             <button
               type="button"
               onClick={() => handleDemoLogin("tapan@admin.com", "tapan123")}
-              className="demo-badge-btn admin"
+              className="px-2 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
             >
-              Admin: Tapan
+              Admin
             </button>
             <button
               type="button"
               onClick={() => handleDemoLogin("prince@owner.com", "prince123")}
-              className="demo-badge-btn owner"
+              className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
             >
-              Owner: Prince
+              Owner
             </button>
             <button
               type="button"
               onClick={() => handleDemoLogin("dhruv@gmail.com", "dhruv123")}
-              className="demo-badge-btn customer"
+              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
             >
-              Customer: Dhruv
+              Customer
             </button>
           </div>
         </div>
 
-        <p className="register-link">
-          Don't have an account? <Link to="/register">Register</Link>
-        </p>
-
-        <Link to="/" className="back-home">
-          Back to Home
-        </Link>
+        <div className="mt-6 text-center text-xs text-slate-600 space-y-2">
+          <p>
+            Don't have an account?{" "}
+            <Link to="/register" className="font-bold text-blue-600 hover:underline">
+              Register here
+            </Link>
+          </p>
+          <p>
+            <Link to="/" className="text-slate-400 hover:text-slate-600 inline-flex items-center gap-1">
+              <ArrowLeft size={12} />
+              <span>Back to Home</span>
+            </Link>
+          </p>
+        </div>
       </div>
     </div>
   );

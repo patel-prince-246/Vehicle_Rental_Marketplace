@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const helmet = require("helmet");
@@ -14,12 +15,16 @@ const connectDB = require("./config/db");
 const app = express();
 
 // Security middleware
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
 // CORS
 app.use(
   cors({
-    origin: "*"
+    origin: "*",
   })
 );
 
@@ -27,23 +32,27 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: {
-    success: false,
-    message: "Too many requests. Please try again later."
-  }
-});
+// Serve uploaded files statically
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-app.use(limiter);
+// Rate limiting (skip in test environment)
+if (process.env.NODE_ENV !== "test") {
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+    message: {
+      success: false,
+      message: "Too many requests. Please try again later.",
+    },
+  });
+  app.use(limiter);
+}
 
 // Root route
 app.get("/", (req, res) => {
   res.status(200).json({
     success: true,
-    message: "Vehicle Rental Marketplace API is running"
+    message: "Vehicle Rental Marketplace API is running",
   });
 });
 
@@ -80,5 +89,10 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = app;
+
 

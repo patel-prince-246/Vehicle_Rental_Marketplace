@@ -384,11 +384,7 @@ const getUserProfile = async (req, res) => {
     });
 
   } catch (error) {
-
-    console.error(
-      "Get Profile Error:",
-      error
-    );
+    console.error("Get Profile Error:", error);
 
     return res.status(500).json({
       success: false,
@@ -398,9 +394,72 @@ const getUserProfile = async (req, res) => {
   }
 };
 
+// ==============================
+// UPLOAD / UPDATE DRIVING LICENSE
+// ==============================
+const uploadDrivingLicense = async (req, res) => {
+
+  try {
+    const { licenseNumber, imageUrl } = req.body;
+
+    let finalImageUrl = imageUrl;
+    if (req.file) {
+      finalImageUrl = `/uploads/licenses/${req.file.filename}`;
+    }
+
+    if (!licenseNumber && !finalImageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "License number or document image is required",
+      });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    user.license = {
+      licenseNumber: licenseNumber || user.license?.licenseNumber || "",
+      imageUrl: finalImageUrl || user.license?.imageUrl || "",
+      status: "uploaded",
+    };
+
+    await user.save();
+
+    // Create notification
+    try {
+      const Notification = require("../models/Notification");
+      await Notification.create({
+        userId: user._id,
+        type: "license_submitted",
+        message: "Your driving license has been uploaded and submitted for administrator review.",
+      });
+    } catch (nErr) {
+      console.warn("Notification creation error:", nErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Driving license uploaded successfully and submitted for review.",
+      license: user.license,
+    });
+  } catch (error) {
+    console.error("Upload License Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
 
 module.exports = {
   registerUser,
   loginUser,
-  getUserProfile
-};
+  getUserProfile,
+  uploadDrivingLicense,
+};

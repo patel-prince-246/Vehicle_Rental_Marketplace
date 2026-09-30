@@ -39,9 +39,10 @@ const vehicleSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["Bike", "Car", "Scooter", "SUV", "Other"],
+      enum: ["Bike", "Car", "Scooter", "SUV", "Luxury", "Van", "Other"],
       required: true
     },
+
 
     // Backward compatibility for legacy vehicles created with price
     price: {

@@ -1,14 +1,33 @@
 const mongoose = require("mongoose");
 
 const connectDB = async () => {
-  try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
+  if (mongoose.connection.readyState >= 1) {
+    return mongoose.connection;
+  }
 
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  try {
+    const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/vehicle_rental_db";
+    const conn = await mongoose.connect(uri);
+
+    if (process.env.NODE_ENV !== "test") {
+      console.log(`MongoDB Connected: ${conn.connection.host}`);
+    }
+    return conn;
   } catch (error) {
     console.error("MongoDB Connection Error:", error.message);
-    process.exit(1);
+    if (process.env.NODE_ENV !== "test") {
+      process.exit(1);
+    }
+    throw error;
   }
 };
 
 module.exports = connectDB;
+
+
+
+
+
+
+
+

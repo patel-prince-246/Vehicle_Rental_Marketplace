@@ -204,6 +204,14 @@ const createBooking = async (req, res) => {
       paymentStatus: "pending"
     });
 
+    // Send email confirmation
+    try {
+      const { sendBookingConfirmation } = require("../services/emailService");
+      await sendBookingConfirmation(customer, booking, vehicle);
+    } catch (eErr) {
+      console.warn("Booking confirmation email error:", eErr.message);
+    }
+
     return res.status(201).json({
       success: true,
       message: "Booking created successfully",
@@ -211,6 +219,7 @@ const createBooking = async (req, res) => {
     });
   } catch (error) {
     console.error("Create Booking Error:", error);
+
 
     return res.status(500).json({
       success: false,
@@ -462,6 +471,17 @@ const updateBookingStatus = async (req, res) => {
 
     await refreshVehicleStatus(booking.vehicleId);
 
+    // Send email notification to customer
+    try {
+      const customer = await User.findById(booking.customerId);
+      if (customer) {
+        const { sendBookingStatusUpdate } = require("../services/emailService");
+        await sendBookingStatusUpdate(customer, booking, `Your booking status has been updated to "${status}".`);
+      }
+    } catch (eErr) {
+      console.warn("Booking status email error:", eErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       message: "Booking status updated successfully",
@@ -529,6 +549,17 @@ const cancelBooking = async (req, res) => {
 
     await refreshVehicleStatus(booking.vehicleId);
 
+    // Send email notification on cancellation
+    try {
+      const customer = await User.findById(booking.customerId);
+      if (customer) {
+        const { sendBookingStatusUpdate } = require("../services/emailService");
+        await sendBookingStatusUpdate(customer, booking, "Your booking has been cancelled.");
+      }
+    } catch (eErr) {
+      console.warn("Booking cancel email error:", eErr.message);
+    }
+
     return res.status(200).json({
       success: true,
       message: "Booking cancelled successfully",
@@ -538,6 +569,7 @@ const cancelBooking = async (req, res) => {
           ? "Payment was already completed. Request a refund through the payment API."
           : "No completed payment was found for this booking."
     });
+
   } catch (error) {
     console.error("Cancel Booking Error:", error);
 

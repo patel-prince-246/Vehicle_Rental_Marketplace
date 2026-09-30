@@ -1,10 +1,10 @@
-
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Search, SlidersHorizontal, MapPin } from "lucide-react";
-import Navbar from "../components/Navbar";
+import { Search, SlidersHorizontal } from "lucide-react";
+import Navbar from "../components/common/Navbar";
+import Footer from "../components/common/Footer";
+import VehicleCard from "../components/cards/VehicleCard";
+import EmptyState from "../components/common/EmptyState";
 import api from "../services/api";
-import "./Vehicles.css";
 
 function Vehicles() {
   const [vehicles, setVehicles] = useState([]);
@@ -23,8 +23,6 @@ function Vehicles() {
         setError("");
 
         const response = await api.get("/vehicles");
-
-        // Support common API response formats.
         const data = response.data;
         const vehicleList = Array.isArray(data)
           ? data
@@ -34,8 +32,7 @@ function Vehicles() {
       } catch (err) {
         console.error("Error fetching vehicles:", err);
         setError(
-          err.response?.data?.message ||
-            "Unable to load vehicles. Please try again."
+          err.response?.data?.message || "Unable to load vehicles. Please try again."
         );
       } finally {
         setLoading(false);
@@ -50,18 +47,6 @@ function Vehicles() {
 
   const getVehiclePrice = (vehicle) =>
     Number(vehicle.pricePerDay ?? vehicle.rentPerDay ?? vehicle.price ?? 0);
-
-  const getVehicleImage = (vehicle) => {
-    if (Array.isArray(vehicle.images) && vehicle.images.length > 0) {
-      return vehicle.images[0];
-    }
-
-    return (
-      vehicle.image ||
-      vehicle.images?.[0]?.url ||
-      "https://placehold.co/600x350?text=Vehicle"
-    );
-  };
 
   const filteredVehicles = vehicles
     .filter((vehicle) => {
@@ -78,140 +63,124 @@ function Vehicles() {
       return matchesSearch && matchesType && matchesPrice;
     })
     .sort((a, b) => {
-      if (sort === "low") {
+      if (sort === "price-low")
         return getVehiclePrice(a) - getVehiclePrice(b);
-      }
-
-      if (sort === "high") {
+      if (sort === "price-high")
         return getVehiclePrice(b) - getVehiclePrice(a);
-      }
-
       return 0;
     });
 
   return (
-    <>
+    <div className="min-h-screen flex flex-col bg-slate-50">
       <Navbar />
 
-      <main className="vehicles-page">
-        <section className="vehicles-heading">
-          <span className="page-label">EXPLORE OUR VEHICLES</span>
-          <h1>Find Your Perfect Ride</h1>
-          <p>Search and compare vehicles available for rent.</p>
-        </section>
+      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Title */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+            Explore Available Fleet
+          </h1>
+          <p className="text-slate-600 mt-1 text-sm">
+            Find the right ride for your travel plans across Gujarat with live availability.
+          </p>
+        </div>
 
-        <section className="vehicle-filters">
-          <div className="search-box">
-            <Search size={20} />
+        {/* Filters Bar */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">
+          {/* Search */}
+          <div className="relative">
+            <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by brand or model"
+              placeholder="Search by brand or model..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
             />
           </div>
 
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-          >
-            <option value="All">All vehicle types</option>
-            <option value="Car">Cars</option>
-            <option value="Bike">Bikes</option>
-            <option value="Scooter">Scooters</option>
-            <option value="SUV">SUVs</option>
-            <option value="Other">Other</option>
-          </select>
+          {/* Type Filter */}
+          <div>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 bg-white"
+            >
+              <option value="All">All Vehicle Types</option>
+              <option value="Car">Cars</option>
+              <option value="SUV">SUVs</option>
+              <option value="Luxury">Luxury</option>
+              <option value="Bike">Bikes & Scooters</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
 
-          <input
-            type="number"
-            min="0"
-            placeholder="Max price per day"
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
-          />
+          {/* Max Price */}
+          <div>
+            <input
+              type="number"
+              placeholder="Max Price (₹/day)"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700"
+            />
+          </div>
 
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <option value="default">Sort by: Default</option>
-            <option value="low">Price: Low to High</option>
-            <option value="high">Price: High to Low</option>
-          </select>
-        </section>
-
-        <div className="results-heading">
-          <h2>Available Vehicles</h2>
-          <span>{filteredVehicles.length} vehicles found</span>
+          {/* Sort Option */}
+          <div>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium text-slate-700 bg-white"
+            >
+              <option value="default">Sort: Default</option>
+              <option value="price-low">Price: Low to High</option>
+              <option value="price-high">Price: High to Low</option>
+            </select>
+          </div>
         </div>
 
+        {/* Results Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-lg font-bold text-slate-900">
+            {filteredVehicles.length} {filteredVehicles.length === 1 ? "Vehicle" : "Vehicles"} Found
+          </h2>
+        </div>
+
+        {/* Content States */}
         {loading ? (
-          <div className="no-vehicles">
-            <p>Loading vehicles...</p>
+          <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+            <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            <p className="text-slate-500 font-medium">Loading available fleet...</p>
           </div>
         ) : error ? (
-          <div className="no-vehicles">
-            <h3>Something went wrong</h3>
-            <p>{error}</p>
-            <button onClick={() => window.location.reload()}>
+          <div className="text-center py-16 bg-white rounded-2xl border border-red-200 p-6">
+            <h3 className="text-lg font-bold text-red-600 mb-2">Unable to Load Vehicles</h3>
+            <p className="text-slate-600 text-sm mb-4">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-slate-900 text-white text-sm font-semibold rounded-lg hover:bg-slate-800"
+            >
               Retry
             </button>
           </div>
         ) : filteredVehicles.length === 0 ? (
-          <div className="no-vehicles">
-            <SlidersHorizontal size={36} />
-            <h3>No vehicles found</h3>
-            <p>Try changing your search or filters.</p>
-          </div>
+          <EmptyState
+            icon={SlidersHorizontal}
+            title="No Matching Vehicles Found"
+            description="Try clearing your search query or adjusting your price filters to see more results."
+          />
         ) : (
-          <section className="vehicle-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredVehicles.map((vehicle) => (
-              <article
-                className="vehicle-card"
-                key={vehicle._id || vehicle.id}
-              >
-                <img
-                  src={getVehicleImage(vehicle)}
-                  alt={`${vehicle.brand || ""} ${
-                    vehicle.model || vehicle.name || "Vehicle"
-                  }`}
-                />
-
-                <div className="vehicle-card-content">
-                  <span className="vehicle-type">
-                    {getVehicleType(vehicle)}
-                  </span>
-
-                  <h3>
-                    {vehicle.brand}{" "}
-                    {vehicle.model || vehicle.name}
-                  </h3>
-
-                  <p className="vehicle-location">
-                    <MapPin size={16} />
-                    {vehicle.city || vehicle.location || "Location unavailable"}
-                  </p>
-
-                  <div className="vehicle-card-footer">
-                    <p>
-                      <strong>₹{getVehiclePrice(vehicle)}</strong>
-                      <span> / day</span>
-                    </p>
-
-                    <Link
-                      to={`/vehicles/${vehicle._id || vehicle.id}`}
-                    >
-                      View Details
-                    </Link>
-                  </div>
-                </div>
-              </article>
+              <VehicleCard key={vehicle._id || vehicle.id || vehicle.vehicleid} vehicle={vehicle} />
             ))}
-          </section>
+          </div>
         )}
       </main>
-    </>
+
+      <Footer />
+    </div>
   );
 }
 

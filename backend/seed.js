@@ -6,6 +6,7 @@ dotenv.config();
 
 const User = require("./models/User");
 const Owner = require("./models/Owner");
+const Agency = require("./models/Agency");
 const Admin = require("./models/Admin");
 const Vehicle = require("./models/Vehicle");
 const Booking = require("./models/Booking");
@@ -21,6 +22,7 @@ const seedDatabase = async () => {
     // Clear existing collections
     await User.deleteMany({});
     await Owner.deleteMany({});
+    await Agency.deleteMany({});
     await Admin.deleteMany({});
     await Vehicle.deleteMany({});
     await Booking.deleteMany({});
@@ -33,10 +35,11 @@ const seedDatabase = async () => {
     // Hash passwords
     const salt = await bcrypt.genSalt(10);
     const adminPassword = await bcrypt.hash("tapan123", salt);
+    const agencyPassword = await bcrypt.hash("agency123", salt);
     const ownerPassword = await bcrypt.hash("prince123", salt);
     const customerPassword = await bcrypt.hash("dhruv123", salt);
 
-    // 1. Create Admin: Tapan
+    // 1. Create Admin: Tapan (Single Master Platform Admin)
     const adminUser = await User.create({
       userid: "USR-ADM-001",
       name: "Tapan",
@@ -59,7 +62,34 @@ const seedDatabase = async () => {
 
     console.log("Created Admin: Tapan (tapan@admin.com / tapan123)");
 
-    // 2. Create Owner: Prince
+    // 2. Create Agency: Gujarat Fleet Agency (Single Master Commercial Agency)
+    const agencyUser = await User.create({
+      userid: "USR-AGC-001",
+      name: "Gujarat Commercial Travels",
+      email: "agency@agency.com",
+      phone: "9876500000",
+      password: agencyPassword,
+      city: "Ahmedabad",
+      role: "agency",
+      isActive: true
+    });
+
+    const agencyProfile = await Agency.create({
+      agencyid: "AGC001",
+      userId: agencyUser._id,
+      agencyName: "Gujarat Commercial Travels",
+      ownerName: "Hitesh Patel",
+      email: "agency@agency.com",
+      phone: "9876500000",
+      city: "Ahmedabad",
+      address: "Near SG Highway, Ahmedabad, Gujarat",
+      registrationNumber: "GJ-AGC-2024-8899",
+      isVerified: true
+    });
+
+    console.log("Created Agency: Gujarat Travels (agency@agency.com / agency123)");
+
+    // 3. Create Owner: Prince (Peer-to-Peer Car Host)
     const ownerUser = await User.create({
       userid: "USR-OWN-001",
       name: "Prince",
@@ -83,7 +113,7 @@ const seedDatabase = async () => {
 
     console.log("Created Owner: Prince (prince@owner.com / prince123)");
 
-    // 3. Create Customer: Dhruv
+    // 4. Create Customer: Dhruv
     const customerUser = await User.create({
       userid: "USR-CUST-001",
       name: "Dhruv",
@@ -101,7 +131,8 @@ const seedDatabase = async () => {
 
     console.log("Created Customer: Dhruv (dhruv@gmail.com / dhruv123)");
 
-    // 4. Create Vehicles for Owner Prince
+    // 5. Create Vehicles
+
     const vehiclesData = [
       {
         vehicleid: "GJ07AC4554",
@@ -204,6 +235,41 @@ const seedDatabase = async () => {
         verificationStatus: "verified",
         imageUrl: "https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=800&auto=format&fit=crop&q=80",
         description: "Aggressive aerodynamic sportbike, quick throttle response and dual-channel ABS."
+      },
+      // Agency Commercial Fleet Vehicles
+      {
+        vehicleid: "GJ01IN7788",
+        ownerType: "agency",
+        ownerId: agencyProfile._id,
+        brand: "Toyota",
+        model: "Innova Crysta",
+        type: "SUV",
+        pricePerDay: 3500,
+        price: 3500,
+        city: "Ahmedabad",
+        year: 2024,
+        registrationNumber: "GJ01IN7788",
+        status: "available",
+        verificationStatus: "verified",
+        imageUrl: "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80",
+        description: "Commercial 7-seater MPV with premium captain seats, ideal for corporate and long tours."
+      },
+      {
+        vehicleid: "GJ01FT9900",
+        ownerType: "agency",
+        ownerId: agencyProfile._id,
+        brand: "Force",
+        model: "Urbania Luxury Van",
+        type: "Van",
+        pricePerDay: 5500,
+        price: 5500,
+        city: "Ahmedabad",
+        year: 2024,
+        registrationNumber: "GJ01FT9900",
+        status: "available",
+        verificationStatus: "verified",
+        imageUrl: "https://images.unsplash.com/photo-1527786356703-4b100091cd2c?w=800&auto=format&fit=crop&q=80",
+        description: "Luxury executive group travel van with recliner seating, AC, and high-speed WiFi."
       }
     ];
 
@@ -213,11 +279,13 @@ const seedDatabase = async () => {
     console.log("\n============================================");
     console.log("DATABASE SEEDING SUCCESSFUL!");
     console.log("============================================");
-    console.log("Credentials:");
-    console.log("Admin:    Tapan  -> email: tapan@admin.com   | password: tapan123");
-    console.log("Owner:    Prince -> email: prince@owner.com  | password: prince123");
-    console.log("Customer: Dhruv  -> email: dhruv@gmail.com   | password: dhruv123");
+    console.log("Master Credentials:");
+    console.log("Admin:    Tapan          -> email: tapan@admin.com   | password: tapan123");
+    console.log("Agency:   Gujarat Travels -> email: agency@agency.com | password: agency123");
+    console.log("Owner:    Prince         -> email: prince@owner.com  | password: prince123");
+    console.log("Customer: Dhruv          -> email: dhruv@gmail.com   | password: dhruv123");
     console.log("============================================\n");
+
 
     await mongoose.disconnect();
     process.exit(0);

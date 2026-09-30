@@ -300,6 +300,18 @@ const updatePaymentStatus = async (req, res) => {
 
       payment.paidAt = new Date();
       booking.paymentStatus = "paid";
+
+      // Send payment receipt email
+      try {
+        const User = require("../models/User");
+        const user = await User.findById(payment.customerId);
+        if (user) {
+          const { sendPaymentReceipt } = require("../services/emailService");
+          await sendPaymentReceipt(user, payment, booking);
+        }
+      } catch (eErr) {
+        console.warn("Payment email receipt error:", eErr.message);
+      }
     } else {
       // Do not overwrite a successful payment status.
       const anotherPaidPayment = await Payment.findOne({
@@ -327,6 +339,7 @@ const updatePaymentStatus = async (req, res) => {
       message: `Payment marked as ${status}`,
       payment
     });
+
   } catch (error) {
     console.error("Update Payment Status Error:", error);
 

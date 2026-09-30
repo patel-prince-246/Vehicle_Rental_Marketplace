@@ -15,6 +15,9 @@ const {
   getAllBookings,
   getAllPayments,
   getAllReviews,
+  getAllLicenses,
+  verifyLicense,
+  rejectLicense,
   getDashboardStats
 } = require("../controllers/adminController");
 
@@ -57,6 +60,23 @@ router.put(
 router.delete(
   "/users/:id",
   deleteUser
+);
+
+
+// Licenses Approval Queue
+router.get(
+  "/licenses",
+  getAllLicenses
+);
+
+router.put(
+  "/users/:id/verify-license",
+  verifyLicense
+);
+
+router.put(
+  "/users/:id/reject-license",
+  rejectLicense
 );
 
 
@@ -122,4 +142,4 @@ router.get(
 );
 
 
-module.exports = router;
+module.exports = router;

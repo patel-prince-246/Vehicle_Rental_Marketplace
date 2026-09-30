@@ -1,9 +1,13 @@
 import { useState, useEffect } from "react";
-import { Plus, Trash2, Car, CheckCircle, AlertCircle, MapPin, Tag } from "lucide-react";
-import Navbar from "../components/Navbar";
+import { Plus, Trash2, Car, MapPin, X } from "lucide-react";
+import Navbar from "../components/common/Navbar";
+import Footer from "../components/common/Footer";
+import StatusBadge from "../components/common/StatusBadge";
+import StatCard from "../components/common/StatCard";
+import EmptyState from "../components/common/EmptyState";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
-import "./OwnerDashboard.css";
+
 
 function OwnerDashboard() {
   const { user } = useAuth();
@@ -110,55 +114,60 @@ function OwnerDashboard() {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
       <Navbar />
 
-      <div className="owner-dashboard-container">
-        <div className="owner-header">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-8 py-10">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
           <div>
-            <h1>Owner Management Portal</h1>
-            <p className="owner-subtitle">
-              Host: <strong>{user?.name || "Prince"}</strong> · Manage your vehicle fleet & rental listings.
-            </p>
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-600">Owner Management Portal</span>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mt-0.5">
+              Host: {user?.name || "Prince"}
+            </h1>
+            <p className="text-slate-500 text-sm mt-0.5">Manage your vehicle listings, daily rates, and status.</p>
           </div>
 
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="add-vehicle-btn"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
           >
-            <Plus size={18} />
+            {showAddForm ? <X size={16} /> : <Plus size={16} />}
             <span>{showAddForm ? "Close Form" : "List New Vehicle"}</span>
           </button>
         </div>
 
         {/* Quick Stats */}
-        <div className="owner-stats-grid">
-          <div className="owner-stat-card">
-            <span>Total Listed Vehicles</span>
-            <strong>{vehicles.length}</strong>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+            <span className="text-xs font-semibold text-slate-500">Total Listed Vehicles</span>
+            <strong className="text-3xl font-extrabold text-slate-900 block mt-1">{vehicles.length}</strong>
           </div>
-          <div className="owner-stat-card">
-            <span>Available for Rent</span>
-            <strong style={{ color: "#16a34a" }}>
+
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+            <span className="text-xs font-semibold text-slate-500">Available for Rent</span>
+            <strong className="text-3xl font-extrabold text-emerald-600 block mt-1">
               {vehicles.filter((v) => v.status === "available").length}
             </strong>
           </div>
-          <div className="owner-stat-card">
-            <span>Verified Status</span>
-            <strong style={{ color: "#2563eb" }}>
+
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs">
+            <span className="text-xs font-semibold text-slate-500">Verified Listings</span>
+            <strong className="text-3xl font-extrabold text-blue-600 block mt-1">
               {vehicles.filter((v) => v.verificationStatus === "verified").length} / {vehicles.length}
             </strong>
           </div>
         </div>
 
-        {/* Add Vehicle Drawer/Form */}
+        {/* Add Vehicle Drawer */}
         {showAddForm && (
-          <div className="add-vehicle-card">
-            <h2>Add New Vehicle to Marketplace</h2>
-            <form onSubmit={handleAddVehicle}>
-              <div className="form-grid-2">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-md mb-8">
+            <h2 className="text-lg font-bold text-slate-900 mb-4">Add Vehicle to Marketplace</h2>
+
+            <form onSubmit={handleAddVehicle} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label>Brand *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Brand *</label>
                   <input
                     type="text"
                     name="brand"
@@ -166,11 +175,12 @@ function OwnerDashboard() {
                     value={formData.brand}
                     onChange={handleInputChange}
                     required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label>Model *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Model *</label>
                   <input
                     type="text"
                     name="model"
@@ -178,14 +188,20 @@ function OwnerDashboard() {
                     value={formData.model}
                     onChange={handleInputChange}
                     required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div className="form-grid-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
-                  <label>Vehicle Type *</label>
-                  <select name="type" value={formData.type} onChange={handleInputChange}>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Vehicle Type *</label>
+                  <select
+                    name="type"
+                    value={formData.type}
+                    onChange={handleInputChange}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
+                  >
                     <option value="Car">Car</option>
                     <option value="Bike">Bike</option>
                     <option value="Scooter">Scooter</option>
@@ -195,7 +211,7 @@ function OwnerDashboard() {
                 </div>
 
                 <div>
-                  <label>Rent Per Day (₹) *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Rent Per Day (₹) *</label>
                   <input
                     type="number"
                     name="pricePerDay"
@@ -203,11 +219,12 @@ function OwnerDashboard() {
                     value={formData.pricePerDay}
                     onChange={handleInputChange}
                     required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label>City / Location *</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">City / Location *</label>
                   <input
                     type="text"
                     name="city"
@@ -215,64 +232,61 @@ function OwnerDashboard() {
                     value={formData.city}
                     onChange={handleInputChange}
                     required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
               </div>
 
-              <div className="form-grid-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label>Year of Manufacture</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Year of Manufacture</label>
                   <input
                     type="number"
                     name="year"
                     placeholder="2024"
                     value={formData.year}
                     onChange={handleInputChange}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
 
                 <div>
-                  <label>Registration Number</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Registration Number</label>
                   <input
                     type="text"
                     name="registrationNumber"
                     placeholder="e.g. GJ06AB1234"
                     value={formData.registrationNumber}
                     onChange={handleInputChange}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                   />
                 </div>
               </div>
 
               <div>
-                <label>Photo Image URL (Optional - default image will be used if blank)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Photo Image URL (Optional)</label>
                 <input
                   type="url"
                   name="imageUrl"
                   placeholder="https://images.unsplash.com/..."
                   value={formData.imageUrl}
                   onChange={handleInputChange}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
                 />
               </div>
 
-              <div>
-                <label>Description</label>
-                <textarea
-                  name="description"
-                  rows="3"
-                  placeholder="Comfortable, sanitized, and well-maintained..."
-                  value={formData.description}
-                  onChange={handleInputChange}
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                <button type="submit" className="save-vehicle-btn" disabled={submitting}>
-                  {submitting ? "Publishing..." : "Publish Vehicle Listing"}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer disabled:opacity-60"
+                >
+                  {submitting ? "Publishing..." : "Publish Vehicle"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowAddForm(false)}
-                  className="cancel-form-btn"
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs rounded-xl transition-all cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -281,44 +295,66 @@ function OwnerDashboard() {
           </div>
         )}
 
-        <h2>My Vehicle Listings</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">My Vehicle Listings</h2>
 
         {loading ? (
-          <p style={{ textAlign: "center", padding: "3rem", color: "#64748b" }}>Loading listings...</p>
+          <div className="text-center py-20 bg-white rounded-2xl border border-slate-200">
+            <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            <p className="text-slate-500 text-sm">Loading your vehicles...</p>
+          </div>
         ) : vehicles.length === 0 ? (
-          <div className="empty-listings-card">
-            <Car size={48} color="#94a3b8" />
-            <h3>No Vehicles Listed Yet</h3>
-            <p>Click "List New Vehicle" above to add your first car or bike to the marketplace!</p>
+          <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300 p-8">
+            <Car size={48} className="text-slate-400 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-slate-900 mb-1">No Vehicles Listed Yet</h3>
+            <p className="text-slate-500 text-sm mb-6 max-w-sm mx-auto">
+              Click "List New Vehicle" above to add your first car or bike to the marketplace!
+            </p>
+            <button
+              onClick={() => setShowAddForm(true)}
+              className="px-6 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700"
+            >
+              List Vehicle Now
+            </button>
           </div>
         ) : (
-          <div className="owner-vehicles-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {vehicles.map((v) => (
-              <div key={v._id} className="owner-vehicle-card">
+              <div
+                key={v._id}
+                className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col"
+              >
                 <img
                   src={v.imageUrl || "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80"}
                   alt={`${v.brand} ${v.model}`}
-                  className="owner-vehicle-img"
+                  className="w-full h-44 object-cover"
                 />
 
-                <div className="owner-vehicle-body">
-                  <div className="owner-vehicle-header">
-                    <h3>{v.brand} {v.model}</h3>
-                    <span className="owner-vehicle-price">₹{v.pricePerDay ?? v.price}/day</span>
+                <div className="p-5 flex-1 flex flex-col">
+                  <div className="flex justify-between items-baseline mb-1">
+                    <h3 className="font-bold text-slate-900">{v.brand} {v.model}</h3>
+                    <span className="font-bold text-blue-600">₹{v.pricePerDay ?? v.price}/day</span>
                   </div>
 
-                  <p className="owner-vehicle-location">
-                    <MapPin size={14} style={{ display: "inline" }} /> {v.city || "Gujarat"} · {v.type}
+                  <p className="text-xs text-slate-500 flex items-center gap-1 mb-4">
+                    <MapPin size={13} className="text-slate-400" />
+                    <span>{v.city || "Gujarat"} · {v.type}</span>
                   </p>
 
-                  <div className="owner-badges-row">
-                    <span className={`status-pill ${v.status}`}>{v.status}</span>
-                    <span className={`verify-pill ${v.verificationStatus}`}>{v.verificationStatus}</span>
+                  <div className="flex gap-2 mb-4">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-100 text-slate-700 border border-slate-200">
+                      {v.status}
+                    </span>
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                      {v.verificationStatus}
+                    </span>
                   </div>
 
-                  <div className="owner-card-footer">
-                    <button onClick={() => handleDelete(v._id)} className="delete-btn">
-                      <Trash2 size={16} />
+                  <div className="mt-auto pt-3 border-t border-slate-100 flex justify-end">
+                    <button
+                      onClick={() => handleDelete(v._id)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                    >
+                      <Trash2 size={14} />
                       <span>Remove</span>
                     </button>
                   </div>
@@ -327,9 +363,12 @@ function OwnerDashboard() {
             ))}
           </div>
         )}
-      </div>
-    </>
+      </main>
+
+      <Footer />
+    </div>
   );
 }
 
 export default OwnerDashboard;
+
