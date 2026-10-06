@@ -774,8 +774,11 @@ function OwnerDashboard() {
 
                     <div className="w-full md:w-auto flex md:flex-col items-center md:items-end justify-between border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 gap-2">
                       <div className="text-left md:text-right">
-                        <span className="text-[10px] text-slate-400 block">Total Earnings</span>
-                        <span className="text-base font-black text-indigo-600">₹{b.totalAmount}</span>
+                        <span className="text-[10px] text-slate-400 block font-medium">Host Payout (85% Net)</span>
+                        <span className="text-base font-black text-emerald-600">
+                          ₹{b.hostEarnings > 0 ? b.hostEarnings : Math.round((Number(b.totalAmount) || 0) * 0.85)}
+                        </span>
+                        <span className="text-[10px] text-slate-400 block">Total Paid: ₹{b.totalAmount}</span>
                       </div>
 
                       {/* Action buttons for booking lifecycle (SRS 3.1.3.5 & 3.1.3.9) */}

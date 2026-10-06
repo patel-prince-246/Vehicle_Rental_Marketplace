@@ -24,6 +24,11 @@ import {
   FileText,
   UserCheck,
   X,
+  TrendingUp,
+  Wallet,
+  Percent,
+  DollarSign,
+  ArrowUpRight,
 } from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
@@ -35,14 +40,14 @@ function AdminDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState(
-    tabFromUrl && ["overview", "vehicles", "users", "agencies", "licenses", "bookings", "disputes"].includes(tabFromUrl)
+    tabFromUrl && ["overview", "financials", "vehicles", "users", "agencies", "licenses", "bookings", "disputes"].includes(tabFromUrl)
       ? tabFromUrl
       : "overview"
   );
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam && ["overview", "vehicles", "users", "agencies", "licenses", "bookings", "disputes"].includes(tabParam)) {
+    if (tabParam && ["overview", "financials", "vehicles", "users", "agencies", "licenses", "bookings", "disputes"].includes(tabParam)) {
       setActiveTab(tabParam);
       fetchTabContent(tabParam);
     }
@@ -300,6 +305,7 @@ function AdminDashboard() {
         <div className="flex flex-wrap gap-2 mb-8 bg-slate-200/80 p-1.5 rounded-2xl w-fit">
           {[
             { id: "overview", label: "Overview", icon: Activity },
+            { id: "financials", label: "Profit & Financials", icon: TrendingUp },
             { id: "licenses", label: "License Verification", icon: FileCheck },
             { id: "vehicles", label: "Vehicles Approval", icon: Car },
             { id: "disputes", label: "Disputes & Support", icon: MessageSquare },
@@ -329,6 +335,68 @@ function AdminDashboard() {
         {/* TAB 1: OVERVIEW */}
         {activeTab === "overview" && (
           <div className="space-y-6">
+            {/* Top Admin Profit & Revenue Banner */}
+            <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+              
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-white/10">
+                <div>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 mb-2">
+                    <TrendingUp size={13} /> Real-Time Marketplace Economics
+                  </span>
+                  <h2 className="text-xl sm:text-2xl font-black tracking-tight">Admin &amp; Platform Profit Engine</h2>
+                  <p className="text-xs text-slate-300 mt-0.5">
+                    Platform takes a flat 15% marketplace commission on every completed booking + convenience fees.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => setActiveTab("financials")}
+                  className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-500/30"
+                >
+                  <Wallet size={14} /> View Profit Breakdown
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-6">
+                <div>
+                  <span className="text-xs font-medium text-slate-400 block">Total Gross Volume</span>
+                  <strong className="text-2xl sm:text-3xl font-black text-white mt-1 block">
+                    ₹{(stats?.financials?.totalGrossVolume ?? 0).toLocaleString()}
+                  </strong>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Total customer rental spend</span>
+                </div>
+
+                <div>
+                  <span className="text-xs font-medium text-emerald-400 block flex items-center gap-1">
+                    <span>Admin Net Profit (15%)</span>
+                    <Percent size={13} />
+                  </span>
+                  <strong className="text-2xl sm:text-3xl font-black text-emerald-400 mt-1 block">
+                    ₹{(stats?.financials?.totalAdminProfit ?? 0).toLocaleString()}
+                  </strong>
+                  <span className="text-[11px] text-emerald-300/70 mt-0.5 block">Pure software platform margin</span>
+                </div>
+
+                <div>
+                  <span className="text-xs font-medium text-indigo-300 block">Host &amp; Agency Payouts (85%)</span>
+                  <strong className="text-2xl sm:text-3xl font-black text-indigo-200 mt-1 block">
+                    ₹{(stats?.financials?.totalHostPayouts ?? 0).toLocaleString()}
+                  </strong>
+                  <span className="text-[11px] text-slate-400 mt-0.5 block">Disbursed to vehicle providers</span>
+                </div>
+
+                <div>
+                  <span className="text-xs font-medium text-amber-300 block">Total Platform Revenue</span>
+                  <strong className="text-2xl sm:text-3xl font-black text-amber-300 mt-1 block">
+                    ₹{(stats?.financials?.totalNetAdminRevenue ?? 0).toLocaleString()}
+                  </strong>
+                  <span className="text-[11px] text-amber-200/70 mt-0.5 block">Commission + ₹99 Platform fee</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Core Counts */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
@@ -389,6 +457,163 @@ function AdminDashboard() {
                   <p className="text-xl font-black text-slate-900 mt-0.5">{stats?.totalDisputes ?? 0}</p>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: FINANCIALS & ADMIN PROFIT */}
+        {activeTab === "financials" && (
+          <div className="space-y-8">
+            {/* Top Cards Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Admin Net Profit</span>
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                    <TrendingUp size={18} />
+                  </div>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-emerald-600">
+                  ₹{(stats?.financials?.totalAdminProfit ?? 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">15% Marketplace Commission on all paid bookings</p>
+              </div>
+
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Gross Booking Volume</span>
+                  <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                    <Car size={18} />
+                  </div>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-slate-900">
+                  ₹{(stats?.financials?.totalGrossVolume ?? 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Total customer rental gross volume processed</p>
+              </div>
+
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Host &amp; Agency Payouts</span>
+                  <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+                    <Wallet size={18} />
+                  </div>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-blue-600">
+                  ₹{(stats?.financials?.totalHostPayouts ?? 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">85% Net payouts to vehicle owners &amp; agencies</p>
+              </div>
+
+              <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Admin Take</span>
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                    <Percent size={18} />
+                  </div>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black text-amber-600">
+                  ₹{(stats?.financials?.totalNetAdminRevenue ?? 0).toLocaleString()}
+                </h3>
+                <p className="text-xs text-slate-500 mt-1">Commission + Convenience verification fees</p>
+              </div>
+            </div>
+
+            {/* Profit Model Explanation Banner */}
+            <div className="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-md">
+              <h3 className="text-lg font-black tracking-tight mb-4 flex items-center gap-2">
+                <ShieldCheck size={20} className="text-indigo-400" />
+                How Platform Admin Profit Is Automated
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                  <strong className="text-emerald-400 text-sm block mb-1">1. 15% Booking Cut</strong>
+                  <p className="text-slate-300 leading-relaxed">
+                    When a customer pays ₹10,000 for a 3-day SUV rental, the system deducts ₹1,500 automatically as Admin Profit.
+                  </p>
+                </div>
+                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                  <strong className="text-indigo-300 text-sm block mb-1">2. 85% Host Payout</strong>
+                  <p className="text-slate-300 leading-relaxed">
+                    The remaining ₹8,500 is credited to the vehicle host upon trip completion, ensuring high host retention.
+                  </p>
+                </div>
+                <div className="p-4 bg-white/5 border border-white/10 rounded-2xl">
+                  <strong className="text-amber-300 text-sm block mb-1">3. Zero Asset Overhead</strong>
+                  <p className="text-slate-300 leading-relaxed">
+                    Admin incurs zero vehicle maintenance or depreciation expenses, keeping profit margins above 90%.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Payouts & Commission Ledger Table */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden p-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Bookings Commission &amp; Payouts Ledger</h3>
+                  <p className="text-xs text-slate-500">Live breakdown of revenue, admin commission, and host payouts per reservation.</p>
+                </div>
+                <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-xl border border-indigo-200">
+                  {bookingsList.length} Total Records
+                </span>
+              </div>
+
+              {bookingsList.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 text-xs">No booking records found in database.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="py-3 px-4 font-bold text-slate-700">Booking Ref</th>
+                        <th className="py-3 px-4 font-bold text-slate-700">Customer</th>
+                        <th className="py-3 px-4 font-bold text-slate-700">Vehicle</th>
+                        <th className="py-3 px-4 font-bold text-slate-700">Total Paid</th>
+                        <th className="py-3 px-4 font-bold text-emerald-700">Admin Cut (15%)</th>
+                        <th className="py-3 px-4 font-bold text-indigo-700">Host Share (85%)</th>
+                        <th className="py-3 px-4 font-bold text-slate-700">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {bookingsList.map((b) => {
+                        const total = Number(b.totalAmount) || 0;
+                        const commission = b.adminCommission > 0 ? b.adminCommission : Math.round(total * 0.15);
+                        const hostCut = b.hostEarnings > 0 ? b.hostEarnings : (total - commission);
+
+                        return (
+                          <tr key={b._id} className="hover:bg-slate-50/60 transition">
+                            <td className="py-3 px-4 font-mono font-bold text-indigo-600">
+                              #{b.bookingid || b._id.slice(-6)}
+                            </td>
+                            <td className="py-3 px-4">
+                              <strong className="text-slate-900 block">{b.customerId?.name || "Customer"}</strong>
+                              <span className="text-slate-400 text-xs">{b.customerId?.email}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="font-medium text-slate-800">{b.vehicleId?.brand} {b.vehicleId?.model}</span>
+                            </td>
+                            <td className="py-3 px-4 font-black text-slate-900">
+                              ₹{total.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 font-black text-emerald-600 bg-emerald-50/40">
+                              +₹{commission.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 font-bold text-indigo-600">
+                              ₹{hostCut.toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadge(b.paymentStatus === "paid" ? "paid" : b.status)}`}>
+                                {b.paymentStatus === "paid" ? "Paid" : b.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         )}

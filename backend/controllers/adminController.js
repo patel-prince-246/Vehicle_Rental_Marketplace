@@ -558,7 +558,8 @@ const getDashboardStats = async (req, res) => {
       totalBookings,
       totalPayments,
       totalReviews,
-      totalDisputes
+      totalDisputes,
+      allBookings
     ] = await Promise.all([
       User.countDocuments(),
       Owner.countDocuments(),
@@ -567,8 +568,35 @@ const getDashboardStats = async (req, res) => {
       Booking.countDocuments(),
       Payment.countDocuments(),
       Review.countDocuments(),
-      Dispute.countDocuments()
+      Dispute.countDocuments(),
+      Booking.find({ status: { $ne: "cancelled" } }).select("totalAmount adminCommission hostEarnings platformFee status paymentStatus createdAt")
     ]);
+
+    // Financial calculations
+    let totalGrossVolume = 0;
+    let totalAdminProfit = 0;
+    let totalHostPayouts = 0;
+    let totalPlatformFees = 0;
+
+    let pendingVolume = 0;
+    let pendingAdminCommission = 0;
+
+    allBookings.forEach((b) => {
+      const amount = Number(b.totalAmount) || 0;
+      const commission = b.adminCommission > 0 ? b.adminCommission : Math.round(amount * 0.15);
+      const hostCut = b.hostEarnings > 0 ? b.hostEarnings : (amount - commission);
+      const pFee = b.platformFee || 99;
+
+      if (b.paymentStatus === "paid" || ["ongoing", "returned", "completed"].includes(b.status)) {
+        totalGrossVolume += amount;
+        totalAdminProfit += commission;
+        totalHostPayouts += hostCut;
+        totalPlatformFees += pFee;
+      } else {
+        pendingVolume += amount;
+        pendingAdminCommission += commission;
+      }
+    });
 
     res.status(200).json({
       success: true,
@@ -580,7 +608,17 @@ const getDashboardStats = async (req, res) => {
         totalBookings,
         totalPayments,
         totalReviews,
-        totalDisputes
+        totalDisputes,
+        financials: {
+          commissionRate: 15, // 15%
+          totalGrossVolume,
+          totalAdminProfit,
+          totalHostPayouts,
+          totalPlatformFees,
+          totalNetAdminRevenue: totalAdminProfit + totalPlatformFees,
+          pendingVolume,
+          pendingAdminCommission
+        }
       }
     });
 

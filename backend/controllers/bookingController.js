@@ -209,6 +209,10 @@ const createBooking = async (req, res) => {
       });
     }
 
+    const adminCommission = Math.round(totalAmount * 0.15);
+    const hostEarnings = totalAmount - adminCommission;
+    const platformFee = 99;
+
     const booking = await Booking.create({
       bookingid,
       customerId: req.user.id,
@@ -216,6 +220,9 @@ const createBooking = async (req, res) => {
       startDate: start,
       endDate: end,
       totalAmount,
+      adminCommission,
+      hostEarnings,
+      platformFee,
       securityDeposit: deposit,
       pickupLocation,
       returnLocation,

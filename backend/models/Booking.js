@@ -44,6 +44,24 @@ const bookingSchema = new mongoose.Schema(
       min: 0
     },
 
+    adminCommission: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    hostEarnings: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    platformFee: {
+      type: Number,
+      default: 99,
+      min: 0
+    },
+
     securityDeposit: {
       type: Number,
       default: 0,
