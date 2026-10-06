@@ -8,7 +8,8 @@ const {
   deleteVehicle,
   getMyVehicles,
   verifyVehicle,
-  rejectVehicle
+  rejectVehicle,
+  getDistinctLocations
 } = require("../controllers/vehicleController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -17,16 +18,18 @@ const { uploadVehicleImage } = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
 
+// Public active vehicle locations list
+router.get("/locations", getDistinctLocations);
 
 // Public vehicle search
 router.get("/", getAllVehicles);
 
 
-// Logged-in owner/agency vehicles
+// Logged-in agency/owner vehicles
 router.get(
   "/my",
   authMiddleware,
-  roleMiddleware("owner", "agency"),
+  roleMiddleware("agency", "owner"),
   getMyVehicles
 );
 
@@ -38,31 +41,31 @@ router.get(
 );
 
 
-// Create vehicle
+// Create vehicle - Agency and Owner
 router.post(
   "/",
   authMiddleware,
-  roleMiddleware("owner", "agency"),
+  roleMiddleware("agency", "owner"),
   uploadVehicleImage.single("image"),
   createVehicle
 );
 
 
-// Update vehicle
+// Update vehicle - Agency, Owner (and Admin)
 router.put(
   "/:id",
   authMiddleware,
-  roleMiddleware("owner", "agency", "admin"),
+  roleMiddleware("agency", "owner", "admin"),
   uploadVehicleImage.single("image"),
   updateVehicle
 );
 
 
-// Delete vehicle
+// Delete vehicle - Agency, Owner (and Admin)
 router.delete(
   "/:id",
   authMiddleware,
-  roleMiddleware("owner", "agency", "admin"),
+  roleMiddleware("agency", "owner", "admin"),
   deleteVehicle
 );
 

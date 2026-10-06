@@ -1,12 +1,42 @@
-import { Link } from "react-router-dom";
-import { Search, ShieldCheck, CalendarCheck, CarFront, ArrowRight, LayoutDashboard, Building2, Shield, User } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Search,
+  ShieldCheck,
+  CalendarCheck,
+  CarFront,
+  ArrowRight,
+  LayoutDashboard,
+  Building2,
+  Shield,
+  User,
+  MapPin,
+  Car,
+  Calendar,
+  Plus,
+} from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
 import { useAuth } from "../context/AuthContext";
 
+import { GUJARAT_DISTRICTS } from "../constants/locations";
 
 function Home() {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [selectedCity, setSelectedCity] = useState("All");
+  const [selectedType, setSelectedType] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const handleHeroSearch = (e) => {
+    e.preventDefault();
+    const params = new URLSearchParams();
+    if (selectedCity && selectedCity !== "All") params.set("location", selectedCity);
+    if (selectedType && selectedType !== "All") params.set("type", selectedType);
+    if (searchQuery.trim()) params.set("search", searchQuery.trim());
+    navigate(`/vehicles?${params.toString()}`);
+  };
 
   const getRoleDashboardLink = () => {
     if (!user) return "/register";
@@ -42,71 +72,204 @@ function Home() {
 
       <main className="flex-1">
         {/* HERO SECTION */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50 to-slate-100 py-16 sm:py-24 px-4 sm:px-8 border-b border-slate-200">
-          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-            <div className="space-y-6 text-center lg:text-left">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-200 text-indigo-700">
-                {user ? `👋 Welcome Back, ${user.name} (${user.role.toUpperCase()})` : "⭐ Trusted Car & Bike Rentals"}
-              </span>
+        <section className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50 to-slate-100 py-16 sm:py-20 px-4 sm:px-8 border-b border-slate-200">
+          <div className="max-w-6xl mx-auto space-y-10">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-center">
+              <div className="space-y-5 text-center lg:text-left">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-200 text-indigo-700">
+                  {user ? `👋 Welcome Back, ${user.name} (${user.role.toUpperCase()})` : "⭐ Trusted Car & Bike Rentals"}
+                </span>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
-                Find Your Perfect <span className="text-indigo-600">Ride Today</span>
-              </h1>
+                <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
+                  Find Your Perfect <span className="text-indigo-600">Ride in Gujarat</span>
+                </h1>
 
-              <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Rent cars, bikes, SUVs, and luxury vehicles from verified hosts and commercial rental agencies with zero hassle.
-              </p>
+                <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                  Rent cars, bikes, SUVs, and luxury vehicles from verified hosts across Vadodara, Ahmedabad, Surat, Rajkot, Nadiad, and Anand with instant confirmation.
+                </p>
 
-              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
-                <Link
-                  to="/vehicles"
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer"
-                >
-                  <Search size={18} />
-                  <span>Explore Vehicles</span>
-                </Link>
+                <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3.5 pt-1">
+                  {user?.role === "agency" ? (
+                    <>
+                      <Link
+                        to="/agency/dashboard"
+                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer text-sm"
+                      >
+                        <Building2 size={16} />
+                        <span>Agency Fleet Portal</span>
+                      </Link>
+                      <Link
+                        to="/agency/dashboard"
+                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all cursor-pointer text-sm"
+                      >
+                        <Plus size={16} />
+                        <span>+ Add Fleet Vehicle</span>
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        to="/vehicles"
+                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer text-sm"
+                      >
+                        <Search size={16} />
+                        <span>Browse All Fleet</span>
+                      </Link>
 
-                <Link
-                  to={getRoleDashboardLink()}
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all cursor-pointer"
-                >
-                  <span>{getRoleDashboardLabel()}</span>
-                  <ArrowRight size={16} />
-                </Link>
+                      <Link
+                        to={getRoleDashboardLink()}
+                        className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all cursor-pointer text-sm"
+                      >
+                        <span>{getRoleDashboardLabel()}</span>
+                        <ArrowRight size={16} />
+                      </Link>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {/* Quick Trust Highlights */}
-              <div className="pt-6 grid grid-cols-3 gap-4 border-t border-slate-200 text-slate-600">
-                <div>
-                  <strong className="block text-xl font-black text-slate-900">100%</strong>
-                  <span className="text-xs">Verified Hosts</span>
-                </div>
-                <div>
-                  <strong className="block text-xl font-black text-slate-900">0 Deposit</strong>
-                  <span className="text-xs">Flexible Terms</span>
-                </div>
-                <div>
-                  <strong className="block text-xl font-black text-slate-900">24/7</strong>
-                  <span className="text-xs">Online Support</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="relative">
-              <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-900 aspect-4/3">
-                <img
-                  src="https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=1000&auto=format&fit=crop&q=80"
-                  alt="Rental vehicle"
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex items-end p-6">
-                  <div className="text-white">
-                    <p className="text-xs font-semibold text-blue-300 uppercase">Featured Marketplace Fleet</p>
-                    <p className="text-lg font-bold">Premium Cars & Bikes across Gujarat</p>
+              <div className="relative">
+                <div className="relative rounded-3xl overflow-hidden shadow-2xl border-4 border-white bg-slate-900 aspect-4/3">
+                  <img
+                    src="https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=1000&auto=format&fit=crop&q=80"
+                    alt="Rental vehicle"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent flex items-end p-6">
+                    <div className="text-white">
+                      <p className="text-xs font-semibold text-blue-300 uppercase">Live Marketplace Fleet</p>
+                      <p className="text-lg font-bold">Verified Cars &amp; Bikes in 10+ Cities</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            {/* AGENCY FLEET QUICK HUB vs CUSTOMER SEARCH WIDGET */}
+            {user?.role === "agency" ? (
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-indigo-900/50">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                  <div>
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 mb-2">
+                      <Building2 size={13} /> Commercial Agency Partner
+                    </span>
+                    <h3 className="text-xl sm:text-2xl font-black text-white">
+                      Manage Your Enterprise Fleet
+                    </h3>
+                    <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-xl leading-relaxed">
+                      Commercial agencies have exclusive authorization to add new vehicles, update rental rates &amp; specifications, and manage incoming customer bookings.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Link
+                      to="/agency/dashboard"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm transition shadow-md shadow-indigo-600/30 cursor-pointer"
+                    >
+                      <Plus size={16} />
+                      <span>+ Add Fleet Vehicle</span>
+                    </Link>
+
+                    <Link
+                      to="/agency/dashboard?tab=vehicles"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm transition backdrop-blur-xs cursor-pointer border border-white/10"
+                    >
+                      <Car size={16} />
+                      <span>Fleet Inventory</span>
+                    </Link>
+
+                    <Link
+                      to="/agency/dashboard?tab=bookings"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs sm:text-sm transition backdrop-blur-xs cursor-pointer border border-white/10"
+                    >
+                      <Calendar size={16} />
+                      <span>Incoming Reservations</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* INTERACTIVE LOCATION & VEHICLE SEARCH WIDGET (FOR CUSTOMERS & GUESTS) */
+              <div className="bg-white rounded-3xl border border-slate-200/90 shadow-xl shadow-indigo-900/5 p-5 sm:p-6">
+                <div className="flex items-center gap-2 mb-4 font-bold text-slate-900 text-sm">
+                  <MapPin size={18} className="text-indigo-600" />
+                  <span>Search Vehicles by Pickup Location &amp; Category</span>
+                </div>
+
+                <form onSubmit={handleHeroSearch} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-center">
+                  {/* City / Location Selector */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Pickup Location / City
+                    </label>
+                    <div className="relative">
+                      <MapPin size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-indigo-600" />
+                      <select
+                        value={selectedCity}
+                        onChange={(e) => setSelectedCity(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer"
+                      >
+                        <option value="All">All Gujarat Districts (33)</option>
+                        {GUJARAT_DISTRICTS.map((district) => (
+                          <option key={district} value={district}>
+                            📍 {district}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Vehicle Type */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Vehicle Type
+                    </label>
+                    <div className="relative">
+                      <Car size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <select
+                        value={selectedType}
+                        onChange={(e) => setSelectedType(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition cursor-pointer"
+                      >
+                        <option value="All">All Types (Cars &amp; Bikes)</option>
+                        <option value="Car">Sedans &amp; Hatchbacks</option>
+                        <option value="SUV">SUVs</option>
+                        <option value="Luxury">Luxury</option>
+                        <option value="Bike">Bikes &amp; Scooters</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Keyword Search */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Keyword (Optional)
+                    </label>
+                    <div className="relative">
+                      <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="e.g. Creta, Activa, Thar..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Submit Search Button */}
+                  <div className="self-end">
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 px-4 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-bold text-xs sm:text-sm rounded-xl shadow-md shadow-indigo-500/20 transition flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Search size={16} />
+                      <span>Search in {selectedCity === "All" ? "Gujarat" : selectedCity}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </section>
 

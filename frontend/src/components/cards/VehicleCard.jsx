@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
-import { MapPin, ShieldCheck, Star } from "lucide-react";
+import { MapPin, ShieldCheck, Eye, Building2, Car } from "lucide-react";
 import StatusBadge from "../common/StatusBadge";
+import { useAuth } from "../../context/AuthContext";
 
 function VehicleCard({ vehicle }) {
+  const { user } = useAuth();
   if (!vehicle) return null;
 
   const getFallbackImage = (vehicleType) => {
@@ -24,13 +26,17 @@ function VehicleCard({ vehicle }) {
     return `http://localhost:5000${url.startsWith("/") ? "" : "/"}${url}`;
   };
 
+  const isAgency = user?.role === "agency";
+  const isOwner = user?.role === "owner";
+  const isHostOrAgency = isAgency || isOwner;
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition group flex flex-col justify-between">
       <div>
         <div className="relative overflow-hidden aspect-16/10 bg-slate-100">
           <img
             src={getImageUrl(vehicle.imageUrl, vehicle.type)}
-            alt={`${vehicle.brand} ${vehicle.model}`}
+            alt={`${vehicle.brand} ${vehicle.model || ""}`.trim()}
             onError={(e) => {
               e.currentTarget.onerror = null;
               e.currentTarget.src = getFallbackImage(vehicle.type);
@@ -55,7 +61,7 @@ function VehicleCard({ vehicle }) {
         <div className="p-5">
           <div className="flex justify-between items-start gap-2 mb-1">
             <h3 className="text-lg font-bold text-slate-900 group-hover:text-indigo-600 transition">
-              {vehicle.brand} {vehicle.model}
+              {vehicle.brand} {vehicle.model || ""}
             </h3>
             <div className="text-right shrink-0">
               <span className="text-lg font-extrabold text-indigo-600">
@@ -80,12 +86,29 @@ function VehicleCard({ vehicle }) {
       </div>
 
       <div className="px-5 pb-5 pt-0">
-        <Link
-          to={`/vehicles/${vehicle._id || vehicle.vehicleid}`}
-          className="w-full inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-sm font-medium transition shadow-xs"
-        >
-          View Details & Book
-        </Link>
+        {isHostOrAgency ? (
+          <div className="flex gap-2">
+            <Link
+              to={`/vehicles/${vehicle._id || vehicle.vehicleid}`}
+              className="flex-1 inline-flex items-center justify-center py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition"
+            >
+              <Eye size={14} className="mr-1 text-slate-500" /> View Specs
+            </Link>
+            <Link
+              to={isAgency ? "/agency/dashboard?tab=vehicles" : "/owner/dashboard?tab=vehicles"}
+              className="flex-1 inline-flex items-center justify-center py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow-xs"
+            >
+              {isAgency ? <Building2 size={14} className="mr-1" /> : <Car size={14} className="mr-1" />} Manage Fleet
+            </Link>
+          </div>
+        ) : (
+          <Link
+            to={`/vehicles/${vehicle._id || vehicle.vehicleid}`}
+            className="w-full inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-slate-900 hover:bg-indigo-600 text-white text-sm font-medium transition shadow-xs"
+          >
+            View Details &amp; Book
+          </Link>
+        )}
       </div>
     </div>
   );

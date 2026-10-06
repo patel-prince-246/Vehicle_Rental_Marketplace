@@ -74,7 +74,6 @@ const createVehicle = async (req, res) => {
 
     if (
       !brand ||
-      !model ||
       !type ||
       pricePerDay === undefined ||
       pricePerDay === "" ||
@@ -82,7 +81,7 @@ const createVehicle = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "Brand, model, type, price per day, and city are required fields."
+        message: "Vehicle name/brand, type, price per day, and city are required fields."
       });
     }
 
@@ -107,30 +106,30 @@ const createVehicle = async (req, res) => {
       });
     }
 
-    let ownerType;
+    let ownerType = req.user.role === "owner" ? "owner" : "agency";
     let ownerProfile;
 
-    if (req.user.role === "owner") {
-      ownerType = "owner";
-      ownerProfile = await Owner.findOne({
-        userId: req.user.id
-      });
-    } else if (req.user.role === "agency") {
-      ownerType = "agency";
+    if (req.user.role === "agency") {
       ownerProfile = await Agency.findOne({
         userId: req.user.id
       });
+    } else if (req.user.role === "owner") {
+      ownerProfile = await Owner.findOne({
+        userId: req.user.id
+      });
+    } else if (req.user.role === "admin") {
+      ownerProfile = (await Agency.findOne()) || (await Owner.findOne());
     } else {
       return res.status(403).json({
         success: false,
-        message: "Only owners and agencies can add vehicles"
+        message: "Only registered owners and agencies can add vehicles to the platform"
       });
     }
 
     if (!ownerProfile) {
       return res.status(404).json({
         success: false,
-        message: "Owner or agency profile not found"
+        message: `${ownerType === "owner" ? "Host" : "Agency"} profile not found. Please complete profile registration.`
       });
     }
 
@@ -222,10 +221,10 @@ const createVehicle = async (req, res) => {
 };
 
 // GET ALL VEHICLES
-// PUBLIC SEARCH
+// PUBLIC SEARCH & LOCATION FILTER
 const getAllVehicles = async (req, res) => {
   try {
-    const { type, city, minPrice, maxPrice } = req.query;
+    const { type, city, location, search, minPrice, maxPrice } = req.query;
 
     const filter = {
       status: "available"
@@ -240,20 +239,45 @@ const getAllVehicles = async (req, res) => {
       ];
     }
 
-    if (type) {
+    if (type && type !== "All") {
       filter.type = type;
     }
 
-    if (city) {
-      const safeCity = city.replace(
+    const targetLocation = (location || city || "").trim();
+    if (targetLocation && targetLocation !== "All") {
+      const safeLocation = targetLocation.replace(
         /[.*+?^${}()|[\]\\]/g,
         "\\$&"
       );
 
       filter.city = {
-        $regex: safeCity,
+        $regex: safeLocation,
         $options: "i"
       };
+    }
+
+    if (search && search.trim()) {
+      const safeSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = { $regex: safeSearch, $options: "i" };
+      
+      const searchConditions = [
+        { brand: searchRegex },
+        { model: searchRegex },
+        { city: searchRegex },
+        { type: searchRegex },
+        { registrationNumber: searchRegex },
+        { description: searchRegex }
+      ];
+
+      if (filter.$or) {
+        filter.$and = [
+          { $or: filter.$or },
+          { $or: searchConditions }
+        ];
+        delete filter.$or;
+      } else {
+        filter.$or = searchConditions;
+      }
     }
 
     if (minPrice !== undefined || maxPrice !== undefined) {
@@ -714,6 +738,74 @@ const rejectVehicle = async (req, res) => {
   }
 };
 
+// GET DISTINCT ACTIVE VEHICLE LOCATIONS
+const getDistinctLocations = async (req, res) => {
+  try {
+    const rawCities = await Vehicle.distinct("city", {
+      status: "available",
+      $or: [
+        { verificationStatus: "verified" },
+        { verificationStatus: { $exists: false } }
+      ]
+    });
+
+    const defaultCities = [
+      "Ahmedabad",
+      "Amreli",
+      "Anand",
+      "Aravalli",
+      "Banaskantha",
+      "Bharuch",
+      "Bhavnagar",
+      "Botad",
+      "Chhota Udaipur",
+      "Dahod",
+      "Dang",
+      "Devbhumi Dwarka",
+      "Gandhinagar",
+      "Gir Somnath",
+      "Jamnagar",
+      "Junagadh",
+      "Kheda (Nadiad)",
+      "Kutch (Bhuj)",
+      "Mahisagar",
+      "Mehsana",
+      "Morbi",
+      "Narmada",
+      "Navsari",
+      "Panchmahal (Godhra)",
+      "Patan",
+      "Porbandar",
+      "Rajkot",
+      "Sabarkantha (Himmatnagar)",
+      "Surat",
+      "Surendranagar",
+      "Tapi (Vyara)",
+      "Vadodara",
+      "Valsad"
+    ];
+    const combined = Array.from(new Set([...(rawCities || []).filter(Boolean), ...defaultCities])).sort();
+
+    return res.status(200).json({
+      success: true,
+      locations: combined
+    });
+  } catch (error) {
+    console.error("Get Distinct Locations Error:", error);
+    return res.status(200).json({
+      success: true,
+      locations: [
+        "Ahmedabad", "Amreli", "Anand", "Aravalli", "Banaskantha", "Bharuch",
+        "Bhavnagar", "Botad", "Chhota Udaipur", "Dahod", "Dang", "Devbhumi Dwarka",
+        "Gandhinagar", "Gir Somnath", "Jamnagar", "Junagadh", "Kheda (Nadiad)",
+        "Kutch (Bhuj)", "Mahisagar", "Mehsana", "Morbi", "Narmada", "Navsari",
+        "Panchmahal (Godhra)", "Patan", "Porbandar", "Rajkot", "Sabarkantha (Himmatnagar)",
+        "Surat", "Surendranagar", "Tapi (Vyara)", "Vadodara", "Valsad"
+      ]
+    });
+  }
+};
+
 module.exports = {
   createVehicle,
   getAllVehicles,
@@ -722,5 +814,6 @@ module.exports = {
   deleteVehicle,
   getMyVehicles,
   verifyVehicle,
-  rejectVehicle
+  rejectVehicle,
+  getDistinctLocations
 };

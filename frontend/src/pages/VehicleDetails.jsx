@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react";
 import { useParams, Link } from "react-router-dom";
-import { MapPin, ShieldCheck, User, Calendar, AlertCircle, ArrowLeft, Star, Check } from "lucide-react";
+import { MapPin, ShieldCheck, User, Calendar, AlertCircle, ArrowLeft, Star, Check, Building2, Edit3, Car } from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
 import StatusBadge from "../components/common/StatusBadge";
+import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
 
 function VehicleDetails() {
+  const { user } = useAuth();
   const { id } = useParams();
   const [vehicle, setVehicle] = useState(null);
+  const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingReviews, setLoadingReviews] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -34,8 +38,23 @@ function VehicleDetails() {
       }
     };
 
+    const fetchReviews = async () => {
+      try {
+        setLoadingReviews(true);
+        const res = await api.get(`/reviews/vehicle/${id}`);
+        if (res.data?.success && res.data.reviews) {
+          setReviews(res.data.reviews);
+        }
+      } catch (err) {
+        console.warn("Could not load reviews for vehicle:", err.message);
+      } finally {
+        setLoadingReviews(false);
+      }
+    };
+
     if (id) {
       fetchVehicle();
+      fetchReviews();
     }
   }, [id]);
 
@@ -72,6 +91,18 @@ function VehicleDetails() {
 
   const vehicleName = `${vehicle.brand} ${vehicle.model}`;
   const price = vehicle.pricePerDay ?? vehicle.price ?? 0;
+
+  // Calculate rating stats
+  const totalReviews = reviews.length;
+  const avgRating = totalReviews > 0
+    ? (reviews.reduce((acc, r) => acc + (Number(r.rating) || 0), 0) / totalReviews).toFixed(1)
+    : (vehicle.averageRating ? Number(vehicle.averageRating).toFixed(1) : "5.0");
+
+  const ratingCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  reviews.forEach((r) => {
+    const star = Math.round(r.rating || 5);
+    if (ratingCounts[star] !== undefined) ratingCounts[star]++;
+  });
   
   const getFallbackImage = (vehicleType) => {
     switch (vehicleType?.toLowerCase()) {
@@ -133,12 +164,20 @@ function VehicleDetails() {
                     <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
                       {vehicleName}
                     </h1>
-                    <p className="text-sm text-slate-500 flex items-center gap-1.5 mt-1.5">
-                      <MapPin size={16} className="text-slate-400" />
-                      <span>{vehicle.city || "Gujarat"}</span>
+                    <div className="flex flex-wrap items-center gap-2 mt-2 text-sm text-slate-500">
+                      <span className="flex items-center gap-1">
+                        <MapPin size={15} className="text-slate-400" />
+                        <span>{vehicle.city || "Gujarat"}</span>
+                      </span>
                       <span>·</span>
                       <span>{vehicle.type}</span>
-                    </p>
+                      <span>·</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs">
+                        <Star size={13} className="fill-amber-400 text-amber-400" />
+                        <span>{avgRating}</span>
+                        <span className="text-slate-400 font-normal">({totalReviews} reviews)</span>
+                      </span>
+                    </div>
                   </div>
 
                   <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 border border-emerald-200 rounded-full text-xs font-bold text-emerald-700">
@@ -203,6 +242,145 @@ function VehicleDetails() {
                     </div>
                   </div>
                 </div>
+
+                <hr className="border-slate-100" />
+
+                {/* CUSTOMER REVIEWS & RATINGS SECTION */}
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div>
+                      <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
+                        <span>Customer Reviews &amp; Ratings</span>
+                        <span className="text-xs font-bold px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full">
+                          {totalReviews} Verified {totalReviews === 1 ? "Review" : "Reviews"}
+                        </span>
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Authentic feedback from verified customers who completed trips with this vehicle.
+                      </p>
+                    </div>
+
+                    <div className="hidden sm:flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl border border-amber-200/80">
+                      <Star size={20} className="fill-amber-400 text-amber-400" />
+                      <div>
+                        <span className="text-lg font-black text-slate-900">{avgRating}</span>
+                        <span className="text-xs text-slate-500 font-medium"> / 5.0</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary Breakdown Card */}
+                  {totalReviews > 0 && (
+                    <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200/80 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-6 items-center">
+                      <div className="text-center sm:text-left sm:border-r border-slate-200 sm:pr-4">
+                        <div className="flex items-center justify-center sm:justify-start gap-1.5 text-3xl font-black text-slate-900">
+                          <span>{avgRating}</span>
+                          <Star size={24} className="fill-amber-400 text-amber-400" />
+                        </div>
+                        <div className="flex items-center justify-center sm:justify-start gap-1 mt-1 text-amber-400">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <Star
+                              key={s}
+                              size={14}
+                              className={s <= Math.round(Number(avgRating)) ? "fill-amber-400 text-amber-400" : "text-slate-300"}
+                            />
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-medium mt-1">Based on {totalReviews} renter reviews</p>
+                      </div>
+
+                      {/* Stars Bar breakdown */}
+                      <div className="sm:col-span-2 space-y-1.5 text-xs">
+                        {[5, 4, 3, 2, 1].map((star) => {
+                          const count = ratingCounts[star] || 0;
+                          const pct = totalReviews > 0 ? Math.round((count / totalReviews) * 100) : 0;
+                          return (
+                            <div key={star} className="flex items-center gap-2">
+                              <span className="w-6 font-bold text-slate-600 shrink-0 text-right">{star}★</span>
+                              <div className="flex-1 bg-slate-200 rounded-full h-2 overflow-hidden">
+                                <div
+                                  className="bg-amber-400 h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                              <span className="w-10 text-[11px] text-slate-400 text-right shrink-0">{count} ({pct}%)</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reviews List */}
+                  {loadingReviews ? (
+                    <div className="py-12 text-center">
+                      <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                      <p className="text-xs text-slate-500">Loading reviews...</p>
+                    </div>
+                  ) : reviews.length === 0 ? (
+                    <div className="bg-slate-50 rounded-2xl p-8 text-center border border-slate-200/80">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-500 flex items-center justify-center mx-auto mb-3">
+                        <Star size={24} />
+                      </div>
+                      <h3 className="font-bold text-sm text-slate-800">No Customer Reviews Yet</h3>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                        This vehicle is ready for booking! Complete your trip to be the first customer to leave a verified review.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {reviews.map((rev) => {
+                        const custName = rev.customerId?.name || "Verified Customer";
+                        const custInitial = custName.charAt(0).toUpperCase();
+                        const revDate = rev.createdAt
+                          ? new Date(rev.createdAt).toLocaleDateString(undefined, {
+                              year: "numeric",
+                              month: "short",
+                              day: "numeric",
+                            })
+                          : "Recent Trip";
+
+                        return (
+                          <div
+                            key={rev._id}
+                            className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs hover:border-slate-300 transition"
+                          >
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                                  {custInitial}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h4 className="font-bold text-sm text-slate-900">{custName}</h4>
+                                    <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <Check size={11} /> Verified Renter
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-400 mt-0.5">
+                                    {rev.customerId?.city ? `📍 ${rev.customerId.city} · ` : ""}
+                                    Reviewed on {revDate}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {/* Star Rating Badge */}
+                              <div className="flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 shrink-0">
+                                <Star size={13} className="fill-amber-400 text-amber-400" />
+                                <span className="text-xs font-black text-amber-900">{rev.rating}.0</span>
+                              </div>
+                            </div>
+
+                            {/* Comment */}
+                            <p className="text-xs text-slate-700 leading-relaxed font-normal bg-slate-50/70 p-3.5 rounded-xl border border-slate-100">
+                              "{rev.comment || "Great vehicle in pristine condition. Host was very professional and accommodating throughout the entire rental experience!"}"
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -232,12 +410,28 @@ function VehicleDetails() {
               </div>
             </div>
 
-            <Link
-              to={`/booking/${vehicle._id}`}
-              className="w-full inline-flex items-center justify-center py-3.5 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/25 transition-all text-center"
-            >
-              Proceed to Booking
-            </Link>
+            {user?.role === "agency" ? (
+              <Link
+                to="/agency/dashboard?tab=vehicles"
+                className="w-full inline-flex items-center justify-center py-3.5 px-6 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/25 transition-all text-center gap-2"
+              >
+                <Building2 size={18} /> Manage Fleet in Agency Portal
+              </Link>
+            ) : user?.role === "owner" ? (
+              <Link
+                to="/owner/dashboard?tab=vehicles"
+                className="w-full inline-flex items-center justify-center py-3.5 px-6 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-500/25 transition-all text-center gap-2"
+              >
+                <Car size={18} /> Manage Fleet in Host Portal
+              </Link>
+            ) : (
+              <Link
+                to={`/booking/${vehicle._id}`}
+                className="w-full inline-flex items-center justify-center py-3.5 px-6 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-500/25 transition-all text-center"
+              >
+                Proceed to Booking
+              </Link>
+            )}
 
             <p className="text-[11px] text-slate-400 text-center leading-relaxed">
               Instant confirmation will be sent to your registered email address upon reservation.

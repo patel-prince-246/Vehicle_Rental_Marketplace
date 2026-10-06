@@ -60,12 +60,34 @@ function AdminDashboard() {
   // User details modal state
   const [selectedUser, setSelectedUser] = useState(null);
 
+  // Vehicle details inspection modal state (Admin approval review)
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+
   // Dispute resolution modal state
   const [selectedDispute, setSelectedDispute] = useState(null);
   const [disputeStatus, setDisputeStatus] = useState("under_review");
   const [disputeResolution, setDisputeResolution] = useState("");
   const [disputeAdminNotes, setDisputeAdminNotes] = useState("");
   const [resolvingDispute, setResolvingDispute] = useState(false);
+
+  const getFallbackImage = (vehicleType) => {
+    switch (vehicleType?.toLowerCase()) {
+      case "scooter":
+        return "https://images.unsplash.com/photo-1591768575198-88dac53fbd0a?w=800&auto=format&fit=crop&q=80";
+      case "bike":
+        return "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=800&auto=format&fit=crop&q=80";
+      case "suv":
+        return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&auto=format&fit=crop&q=80";
+      default:
+        return "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80";
+    }
+  };
+
+  const getImageUrl = (url, vehicleType) => {
+    if (!url) return getFallbackImage(vehicleType);
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return `http://localhost:5000${url.startsWith("/") ? "" : "/"}${url}`;
+  };
 
   const fetchStats = async () => {
     try {
@@ -480,23 +502,47 @@ function AdminDashboard() {
                     {vehicles.map((v) => (
                       <tr key={v._id} className="hover:bg-slate-50/60 transition">
                         <td className="py-3.5 px-4">
-                          <strong className="text-slate-900">{v.brand} {v.model}</strong>
-                          <div className="text-xs text-slate-400 font-mono">ID: {v.vehicleid}</div>
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-10 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                              <img
+                                src={getImageUrl(v.imageUrl, v.type)}
+                                alt={v.brand}
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = getFallbackImage(v.type);
+                                }}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                            <div>
+                              <strong className="text-slate-900 block">{v.brand} {v.model || ""}</strong>
+                              <div className="text-xs text-slate-400 font-mono">ID: {v.vehicleid || v._id}</div>
+                            </div>
+                          </div>
                         </td>
-                        <td className="py-3.5 px-4 text-slate-600">{v.type}</td>
-                        <td className="py-3.5 px-4 text-slate-600">{v.city}</td>
+                        <td className="py-3.5 px-4 text-slate-600 font-medium">{v.type}</td>
+                        <td className="py-3.5 px-4 text-slate-600">📍 {v.city || "Gujarat"}</td>
                         <td className="py-3.5 px-4 font-bold text-slate-900">₹{v.pricePerDay ?? v.price}</td>
                         <td className="py-3.5 px-4">
                           <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getStatusBadge(v.verificationStatus)}`}>
-                            {v.verificationStatus}
+                            {v.verificationStatus || "pending"}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedVehicle(v)}
+                              className="inline-flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                              title="Inspect Full Vehicle Details"
+                            >
+                              <Eye size={13} /> Inspect Details
+                            </button>
                             {v.verificationStatus !== "verified" && (
                               <button
                                 onClick={() => handleVerifyVehicle(v._id)}
                                 className="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                                title="Approve Vehicle"
                               >
                                 <CheckCircle size={13} /> Approve
                               </button>
@@ -505,6 +551,7 @@ function AdminDashboard() {
                               <button
                                 onClick={() => handleRejectVehicle(v._id)}
                                 className="inline-flex items-center gap-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+                                title="Reject Vehicle"
                               >
                                 <XCircle size={13} /> Reject
                               </button>
@@ -972,6 +1019,187 @@ function AdminDashboard() {
                 type="button"
                 onClick={() => setSelectedUser(null)}
                 className="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== VEHICLE DETAILS INSPECTION MODAL ===================== */}
+      {selectedVehicle && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full p-6 sm:p-8 my-8 relative">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <Car size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-tight">
+                    Vehicle Inspection &amp; Verification
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    Ref ID: #{selectedVehicle.vehicleid || selectedVehicle._id}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedVehicle(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-5 text-xs">
+              {/* Vehicle Image Banner */}
+              <div className="relative h-56 rounded-2xl overflow-hidden bg-slate-100 border border-slate-200">
+                <img
+                  src={getImageUrl(selectedVehicle.imageUrl, selectedVehicle.type)}
+                  alt={selectedVehicle.brand}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = getFallbackImage(selectedVehicle.type);
+                  }}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-3 right-3 flex gap-1.5">
+                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                    selectedVehicle.verificationStatus === "verified"
+                      ? "bg-emerald-500 text-white"
+                      : selectedVehicle.verificationStatus === "rejected"
+                      ? "bg-rose-500 text-white"
+                      : "bg-amber-500 text-white"
+                  }`}>
+                    {selectedVehicle.verificationStatus || "pending"}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-slate-900/80 text-white backdrop-blur-xs">
+                    {selectedVehicle.status || "available"}
+                  </span>
+                </div>
+                <div className="absolute bottom-3 left-3">
+                  <span className="px-3 py-1 rounded-lg bg-slate-900/80 text-white text-xs font-bold backdrop-blur-xs">
+                    {selectedVehicle.type || "Car"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Specifications Grid */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-3">
+                <h4 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Car size={14} className="text-indigo-600" />
+                  Vehicle Specifications &amp; Pricing
+                </h4>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-slate-700">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Vehicle Name</span>
+                    <strong className="text-slate-900 text-sm">{selectedVehicle.brand} {selectedVehicle.model || ""}</strong>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Daily Rental</span>
+                    <strong className="text-indigo-600 text-sm">₹{selectedVehicle.pricePerDay ?? selectedVehicle.price} / day</strong>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">District / City</span>
+                    <strong className="text-slate-900 text-sm">📍 {selectedVehicle.city || "Gujarat"}</strong>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80">
+                    <span className="text-[10px] text-slate-400 block uppercase font-bold">Manufacture Year</span>
+                    <strong className="text-slate-900 text-sm">{selectedVehicle.year || "2024"}</strong>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-medium">Registration Plate:</span>
+                    <span className="font-mono font-bold text-slate-900 text-xs bg-slate-100 px-2 py-0.5 rounded-md">
+                      {selectedVehicle.registrationNumber || "Not provided"}
+                    </span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-medium">Listing Created:</span>
+                    <span className="font-medium text-slate-700 text-xs">
+                      {selectedVehicle.createdAt ? new Date(selectedVehicle.createdAt).toLocaleDateString() : "Recently"}
+                    </span>
+                  </div>
+                </div>
+
+                {selectedVehicle.description && (
+                  <div className="pt-2 text-slate-600 text-xs border-t border-slate-200/60 leading-relaxed">
+                    <strong className="text-slate-900 block text-[11px] uppercase mb-0.5">Description:</strong>
+                    {selectedVehicle.description}
+                  </div>
+                )}
+              </div>
+
+              {/* Host / Agency Provider Details */}
+              <div className="bg-indigo-50/50 rounded-2xl p-4 border border-indigo-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-indigo-950 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <UserCheck size={14} className="text-indigo-600" />
+                    Listed By: {selectedVehicle.ownerType === "agency" ? "Commercial Agency" : "Individual Host"}
+                  </h4>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200 uppercase">
+                    {selectedVehicle.ownerType || "host"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-slate-700 text-xs">
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Host Name</span>
+                    <strong className="text-slate-900">
+                      {selectedVehicle.owner?.agencyName || selectedVehicle.owner?.name || selectedVehicle.owner?.ownerName || "Registered Partner"}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Phone</span>
+                    <span className="font-medium text-slate-800">{selectedVehicle.owner?.phone || "Not provided"}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block text-[10px]">Email</span>
+                    <span className="font-medium text-slate-800 truncate block">{selectedVehicle.owner?.email || "N/A"}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Decision Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-5 mt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  handleVerifyVehicle(selectedVehicle._id);
+                  setSelectedVehicle((prev) => ({ ...prev, verificationStatus: "verified" }));
+                }}
+                className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <CheckCircle size={15} /> Approve &amp; Verify Listing
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  handleRejectVehicle(selectedVehicle._id);
+                  setSelectedVehicle((prev) => ({ ...prev, verificationStatus: "rejected" }));
+                }}
+                className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <XCircle size={15} /> Reject Listing
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedVehicle(null)}
+                className="px-5 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 transition cursor-pointer"
               >
                 Close
               </button>

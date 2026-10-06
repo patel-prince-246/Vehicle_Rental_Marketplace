@@ -144,9 +144,11 @@ function Navbar() {
             <Link to="/" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
               Home
             </Link>
-            <Link to="/vehicles" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
-              Explore Fleet
-            </Link>
+            {user?.role !== "agency" && (
+              <Link to="/vehicles" className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
+                Explore Fleet
+              </Link>
+            )}
             {user && (
               <Link to={getDashboardPath()} className="text-sm font-medium text-slate-600 hover:text-indigo-600 transition">
                 Dashboard

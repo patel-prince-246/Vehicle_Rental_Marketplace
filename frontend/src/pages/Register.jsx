@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Car, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { GUJARAT_DISTRICTS } from "../constants/locations";
 
 function Register() {
   const [role, setRole] = useState("customer");
@@ -204,16 +205,20 @@ function Register() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">City *</label>
-              <input
-                type="text"
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Gujarat District / City *</label>
+              <select
                 name="city"
-                placeholder="e.g. Vadodara"
                 value={formData.city}
                 onChange={handleChange}
                 required
-                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white"
-              />
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 focus:bg-white cursor-pointer"
+              >
+                {GUJARAT_DISTRICTS.map((district) => (
+                  <option key={district} value={district}>
+                    📍 {district}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

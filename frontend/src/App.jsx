@@ -33,8 +33,8 @@ function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Authenticated Booking Route */}
-      <Route element={<ProtectedRoute />}>
+      {/* Authenticated Booking Route (Customer only) */}
+      <Route element={<ProtectedRoute allowedRoles={["customer", "admin"]} />}>
         <Route path="/booking/:id" element={<Booking />} />
       </Route>
 

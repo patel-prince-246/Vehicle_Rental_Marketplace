@@ -18,6 +18,9 @@ import {
   Edit3,
   CreditCard,
   CheckCircle2,
+  Star,
+  X,
+  RotateCcw,
 } from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
@@ -49,6 +52,13 @@ function CustomerDashboard() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Review & Rating Modal state
+  const [reviewModalBooking, setReviewModalBooking] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewedBookingIds, setReviewedBookingIds] = useState(new Set());
 
   // Payment modal state (post-approval payment)
   const [payModalBooking, setPayModalBooking] = useState(null);
@@ -124,6 +134,44 @@ function CustomerDashboard() {
       setError("Unable to load your bookings.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleReturnVehicle = async (bookingId) => {
+    if (!window.confirm("Confirm that you have returned this vehicle to the host/agency garage?")) return;
+    try {
+      const res = await api.put(`/bookings/${bookingId}/status`, { status: "returned" });
+      if (res.data?.success) {
+        alert("Vehicle marked as returned! The host has been notified to inspect the vehicle. Please take a moment to leave a rating & review!");
+        fetchBookings();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to update return status.");
+    }
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewModalBooking) return;
+    setSubmittingReview(true);
+    try {
+      const res = await api.post("/reviews", {
+        vehicleId: reviewModalBooking.vehicleId?._id || reviewModalBooking.vehicleId,
+        bookingId: reviewModalBooking._id,
+        rating: Number(reviewRating),
+        comment: reviewComment.trim()
+      });
+      if (res.data?.success) {
+        alert("Thank you! Your review and rating have been submitted successfully.");
+        setReviewedBookingIds((prev) => new Set(prev).add(reviewModalBooking._id));
+        setReviewModalBooking(null);
+        setReviewComment("");
+        setReviewRating(5);
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to submit review.");
+    } finally {
+      setSubmittingReview(false);
     }
   };
 
@@ -630,6 +678,28 @@ function CustomerDashboard() {
                               {new Date(booking.startDate).toLocaleDateString()} &rarr; {new Date(booking.endDate).toLocaleDateString()}
                             </span>
                           </p>
+
+                          {booking.status === "cancelled" && (
+                            <div className="mt-3 p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-900 max-w-md">
+                              <div className="flex items-center gap-1.5 font-bold text-rose-700 mb-1">
+                                <AlertTriangle size={14} className="shrink-0" />
+                                <span>
+                                  {booking.cancelledBy === "owner" || booking.cancelledBy === "agency"
+                                    ? "Declined by Host (Vehicle Not Available)"
+                                    : "Booking Cancelled"}
+                                </span>
+                              </div>
+                              <p className="text-slate-700 text-[11px] leading-relaxed">
+                                <strong>Reason from Host:</strong> {booking.cancellationReason || "Vehicle unavailable for requested dates."}
+                              </p>
+                              {booking.refundAmount > 0 && (
+                                <p className="text-emerald-700 text-[11px] font-bold mt-1.5 flex items-center gap-1">
+                                  <CheckCircle size={13} />
+                                  <span>Full Refund of ₹{booking.refundAmount} successfully processed</span>
+                                </p>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -667,6 +737,26 @@ function CustomerDashboard() {
                             <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
                               ⏳ Awaiting Host Approval
                             </span>
+                          )}
+
+                          {booking.status === "ongoing" && (
+                            <button
+                              onClick={() => handleReturnVehicle(booking._id)}
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1"
+                            >
+                              <RotateCcw size={13} />
+                              <span>Return Vehicle</span>
+                            </button>
+                          )}
+
+                          {(booking.status === "returned" || booking.status === "completed") && (
+                            <button
+                              onClick={() => setReviewModalBooking(booking)}
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1"
+                            >
+                              <Star size={13} className="fill-white" />
+                              <span>{reviewedBookingIds.has(booking._id) ? "Reviewed ★" : "Leave Review & Rating"}</span>
+                            </button>
                           )}
 
                           {["pending", "confirmed"].includes(booking.status) && (
@@ -1237,6 +1327,102 @@ function CustomerDashboard() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ===================== REVIEW & RATING MODAL ===================== */}
+      {reviewModalBooking && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-md w-full p-6 sm:p-8 my-8 relative animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Star size={20} className="fill-amber-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Trip Review &amp; Rating</h3>
+                  <p className="text-xs text-slate-500">
+                    {reviewModalBooking.vehicleId?.brand} {reviewModalBooking.vehicleId?.model || ""}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setReviewModalBooking(null)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitReview} className="space-y-4">
+              {/* Star Selection */}
+              <div className="text-center py-2 bg-slate-50 rounded-2xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">
+                  Rate Your Experience
+                </span>
+                <div className="flex items-center justify-center gap-2">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className="p-1 transition-transform hover:scale-125 cursor-pointer"
+                    >
+                      <Star
+                        size={28}
+                        className={
+                          star <= reviewRating
+                            ? "text-amber-400 fill-amber-400"
+                            : "text-slate-300"
+                        }
+                      />
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs font-bold text-slate-700 mt-2 block">
+                  {reviewRating === 5
+                    ? "⭐⭐⭐⭐⭐ Outstanding Experience!"
+                    : reviewRating === 4
+                    ? "⭐⭐⭐⭐ Very Good"
+                    : reviewRating === 3
+                    ? "⭐⭐⭐ Good"
+                    : reviewRating === 2
+                    ? "⭐⭐ Fair"
+                    : "⭐ Poor"}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Your Feedback / Comment (Optional)
+                </label>
+                <textarea
+                  rows="3"
+                  placeholder="Share details about vehicle cleanliness, performance, pickup experience..."
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-600 focus:bg-white"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setReviewModalBooking(null)}
+                  className="flex-1 py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submittingReview}
+                  className="flex-1 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-95 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-500/20 transition cursor-pointer disabled:opacity-60"
+                >
+                  {submittingReview ? "Submitting..." : "Submit Review"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

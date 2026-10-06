@@ -253,44 +253,75 @@ const registerUser = async (req, res) => {
 
 
 // ==============================
-// LOGIN USER
+// LOGIN USER (Email or Mobile Number + Role)
 // ==============================
 const loginUser = async (req, res) => {
   try {
-
     const {
       email,
+      phone,
+      identifier,
+      role,
       password
     } = req.body;
 
+    const loginIdentifier = (identifier || email || phone || "").trim();
 
     // ------------------------------
     // VALIDATION
     // ------------------------------
-    if (!email || !password) {
+    if (!loginIdentifier || !password) {
       return res.status(400).json({
         success: false,
-        message:
-          "Email and password are required"
+        message: "Email or mobile number, and password are required"
       });
     }
 
-
     // ------------------------------
-    // FIND USER
+    // FIND USER (BY EMAIL OR PHONE)
     // ------------------------------
-    const user = await User.findOne({
-      email: email.toLowerCase()
-    });
+    const isEmail = loginIdentifier.includes("@");
+    let query;
 
+    if (isEmail) {
+      query = { email: loginIdentifier.toLowerCase() };
+    } else {
+      query = {
+        $or: [
+          { phone: loginIdentifier },
+          { email: loginIdentifier.toLowerCase() }
+        ]
+      };
+    }
+
+    if (role && ["customer", "owner", "agency", "admin"].includes(role.toLowerCase())) {
+      query.role = role.toLowerCase();
+    }
+
+    let user = await User.findOne(query);
+
+    // If not found with exact role query, check if account exists under a different role
+    if (!user && role) {
+      const existingAnyRole = await User.findOne(
+        isEmail
+          ? { email: loginIdentifier.toLowerCase() }
+          : { $or: [{ phone: loginIdentifier }, { email: loginIdentifier.toLowerCase() }] }
+      );
+
+      if (existingAnyRole) {
+        return res.status(401).json({
+          success: false,
+          message: `This account is registered as '${existingAnyRole.role}', not as '${role}'. Please select the '${existingAnyRole.role}' role.`
+        });
+      }
+    }
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "No user found with the provided email or mobile number"
       });
     }
-
 
     // ------------------------------
     // CHECK ACTIVE USER
@@ -298,10 +329,9 @@ const loginUser = async (req, res) => {
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
-        message: "User account is inactive"
+        message: "User account is inactive or blocked. Please contact support."
       });
     }
-
 
     // ------------------------------
     // COMPARE PASSWORD
@@ -311,20 +341,17 @@ const loginUser = async (req, res) => {
       user.password
     );
 
-
     if (!passwordMatch) {
       return res.status(401).json({
         success: false,
-        message: "Invalid email or password"
+        message: "Invalid credentials. Please check your password."
       });
     }
-
 
     // ------------------------------
     // GENERATE JWT
     // ------------------------------
     const token = generateToken(user);
-
 
     // ------------------------------
     // LOGIN RESPONSE
@@ -332,9 +359,7 @@ const loginUser = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Login successful",
-
       token,
-
       user: {
         id: user._id,
         name: user.name,
@@ -345,9 +370,7 @@ const loginUser = async (req, res) => {
         license: user.license
       }
     });
-
   } catch (error) {
-
     console.error("Login Error:", error);
 
     return res.status(500).json({

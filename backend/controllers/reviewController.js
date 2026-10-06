@@ -67,7 +67,7 @@ const createReview = async (req, res) => {
       });
     }
 
-    if (booking.status !== "returned") {
+    if (booking.status !== "returned" && booking.status !== "completed") {
       return res.status(400).json({
         success: false,
         message: "Review can be submitted after vehicle return"
@@ -106,6 +106,56 @@ const createReview = async (req, res) => {
       comment
     });
 
+    // Send notifications to Host and Customer
+    try {
+      const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
+      const User = require("../models/User");
+      const Owner = require("../models/Owner");
+      const Agency = require("../models/Agency");
+
+      const reviewer = await User.findById(req.user.id);
+      const reviewerName = reviewer?.name || "Customer";
+
+      // 1. Notify Host / Agency
+      let hostDoc = null;
+      if (vehicle.ownerType === "agency") {
+        hostDoc = await Agency.findById(vehicle.ownerId);
+      } else if (vehicle.ownerId) {
+        hostDoc = await Owner.findById(vehicle.ownerId);
+      }
+
+      if (hostDoc && hostDoc.userId) {
+        await sendNotification({
+          userId: hostDoc.userId,
+          role: vehicle.ownerType || "owner",
+          type: "review_received",
+          title: "New Customer Review & Rating",
+          message: `${reviewerName} gave your ${vehicle.brand} a ${rating}★ rating: "${comment ? comment.slice(0, 60) + (comment.length > 60 ? '...' : '') : 'Great ride!'}"`,
+          link: vehicle.ownerType === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+        });
+      }
+
+      // 2. Notify Customer
+      await sendNotification({
+        userId: req.user.id,
+        role: "customer",
+        type: "review_submitted",
+        title: "Review Submitted",
+        message: `Thank you for rating your trip with ${vehicle.brand} (${rating}★). Your feedback helps improve our community!`,
+        link: "/customer/dashboard"
+      });
+
+      // 3. Notify Admin
+      await sendRoleNotification("admin", {
+        type: "review_submitted",
+        title: "New Vehicle Review",
+        message: `${reviewerName} submitted a ${rating}★ review for ${vehicle.brand} ${vehicle.model || ""}.`,
+        link: "/admin/dashboard"
+      });
+    } catch (nErr) {
+      console.warn("Review notification error:", nErr.message);
+    }
+
     res.status(201).json({
       success: true,
       message: "Review submitted successfully",
@@ -132,8 +182,9 @@ const getVehicleReviews = async (req, res) => {
     const reviews = await Review.find({
       vehicleId: req.params.vehicleId
     })
-      .populate("customerId", "name")
-      .populate("vehicleId");
+      .populate("customerId", "name city email avatar")
+      .populate("vehicleId", "brand model")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,

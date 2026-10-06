@@ -32,9 +32,19 @@ export function AuthProvider({ children }) {
     checkAuth();
   }, []);
 
-  const login = async (email, password) => {
+  const login = async (identifierOrEmail, password, role) => {
     try {
-      const res = await api.post("/users/login", { email, password });
+      const payload =
+        typeof identifierOrEmail === "object"
+          ? identifierOrEmail
+          : {
+              identifier: identifierOrEmail,
+              email: identifierOrEmail,
+              password,
+              role: role || undefined,
+            };
+
+      const res = await api.post("/users/login", payload);
       if (res.data?.success) {
         const { token: jwtToken, user: userData } = res.data;
         setToken(jwtToken);

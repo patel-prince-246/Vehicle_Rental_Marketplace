@@ -84,7 +84,19 @@ router.put(
 );
 
 
-// Cancel booking (supports both PATCH and PUT)
+// Cancel / Decline booking (supports POST, PATCH, and PUT)
+router.post(
+  "/:id/cancel",
+  authMiddleware,
+  roleMiddleware(
+    "customer",
+    "owner",
+    "agency",
+    "admin"
+  ),
+  cancelBooking
+);
+
 router.patch(
   "/:id/cancel",
   authMiddleware,

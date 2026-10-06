@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Eye,
   UserCheck,
+  Building2,
 } from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
@@ -33,6 +34,7 @@ import StatCard from "../components/common/StatCard";
 import EmptyState from "../components/common/EmptyState";
 import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
+import { GUJARAT_DISTRICTS } from "../constants/locations";
 
 function OwnerDashboard() {
   const { user, refreshProfile } = useAuth();
@@ -171,7 +173,7 @@ function OwnerDashboard() {
   const handleAddVehicle = async (e) => {
     e.preventDefault();
 
-    if (!formData.brand || !formData.model || !formData.pricePerDay || !formData.city) {
+    if (!formData.brand || !formData.pricePerDay || !formData.city) {
       alert("Please fill all required fields.");
       return;
     }
@@ -181,7 +183,7 @@ function OwnerDashboard() {
       const data = new FormData();
       data.append("vehicleid", formData.vehicleid || "VEH-" + Date.now().toString().slice(-6));
       data.append("brand", formData.brand);
-      data.append("model", formData.model);
+      data.append("model", formData.model || "");
       data.append("type", formData.type);
       data.append("pricePerDay", Number(formData.pricePerDay));
       data.append("city", formData.city);
@@ -256,7 +258,7 @@ function OwnerDashboard() {
     e.preventDefault();
     if (!editingVehicle) return;
 
-    if (!editFormData.brand || !editFormData.model || !editFormData.pricePerDay || !editFormData.city) {
+    if (!editFormData.brand || !editFormData.pricePerDay || !editFormData.city) {
       alert("Please fill all required fields.");
       return;
     }
@@ -265,7 +267,7 @@ function OwnerDashboard() {
     try {
       const data = new FormData();
       data.append("brand", editFormData.brand);
-      data.append("model", editFormData.model);
+      data.append("model", editFormData.model || "");
       data.append("type", editFormData.type);
       data.append("pricePerDay", Number(editFormData.pricePerDay));
       data.append("city", editFormData.city);
@@ -327,6 +329,38 @@ function OwnerDashboard() {
     }
   };
 
+  const [declineBookingModal, setDeclineBookingModal] = useState(null);
+  const [declineReason, setDeclineReason] = useState("Vehicle is currently undergoing maintenance / unavailable");
+  const [customReason, setCustomReason] = useState("");
+  const [declining, setDeclining] = useState(false);
+
+  const handleDeclineBookingSubmit = async (e) => {
+    e.preventDefault();
+    if (!declineBookingModal) return;
+    const finalReason = declineReason === "Other" ? customReason.trim() : (customReason.trim() ? `${declineReason} - ${customReason.trim()}` : declineReason);
+    if (!finalReason) {
+      alert("Please provide a reason for declining the booking request.");
+      return;
+    }
+    setDeclining(true);
+    try {
+      const res = await api.post(`/bookings/${declineBookingModal._id}/cancel`, {
+        cancellationReason: finalReason
+      });
+      if (res.data?.success) {
+        alert("Booking request declined. The customer has been sent a notification with your specific reason.");
+        setDeclineBookingModal(null);
+        setCustomReason("");
+        fetchIncomingBookings();
+        fetchMyVehicles();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to decline booking.");
+    } finally {
+      setDeclining(false);
+    }
+  };
+
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     setSavingProfile(true);
@@ -369,13 +403,16 @@ function OwnerDashboard() {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 transition cursor-pointer"
-          >
-            {showAddForm ? <X size={16} /> : <Plus size={16} />}
-            <span>{showAddForm ? "Close Form" : "+ List New Vehicle"}</span>
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:opacity-95 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 transition cursor-pointer"
+            >
+              {showAddForm ? <X size={16} /> : <Plus size={16} />}
+              <span>{showAddForm ? "Close Form" : "+ Add Vehicle"}</span>
+            </button>
+          </div>
         </div>
 
         {/* Quick Stats */}
@@ -445,36 +482,21 @@ function OwnerDashboard() {
           <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-lg mb-8">
             <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
               <Plus size={20} className="text-indigo-600" />
-              Add Vehicle to Marketplace (SRS 3.1.2.1)
+              Add Vehicle to Marketplace
             </h2>
 
             <form onSubmit={handleAddVehicle} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Brand *</label>
-                  <input
-                    type="text"
-                    name="brand"
-                    placeholder="e.g. Hyundai, Honda, Royal Enfield"
-                    value={formData.brand}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Model *</label>
-                  <input
-                    type="text"
-                    name="model"
-                    placeholder="e.g. Creta, City, Classic 350"
-                    value={formData.model}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">Vehicle Name / Brand *</label>
+                <input
+                  type="text"
+                  name="brand"
+                  placeholder="e.g. Hyundai Creta, Honda City, Royal Enfield Classic 350, Activa 6G"
+                  value={formData.brand}
+                  onChange={handleInputChange}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white font-medium"
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -487,10 +509,10 @@ function OwnerDashboard() {
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
                   >
                     <option value="Car">Car</option>
-                    <option value="Bike">Bike</option>
-                    <option value="Scooter">Scooter</option>
                     <option value="SUV">SUV</option>
                     <option value="Luxury">Luxury</option>
+                    <option value="Bike">Bike (Motorcycle)</option>
+                    <option value="Scooter">Scooter (Activa / EV)</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
@@ -509,16 +531,20 @@ function OwnerDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">City / Area *</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Gujarat District / City *</label>
+                  <select
                     name="city"
-                    placeholder="e.g. Vadodara, Ahmedabad"
                     value={formData.city}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                  />
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white cursor-pointer font-medium"
+                  >
+                    {GUJARAT_DISTRICTS.map((district) => (
+                      <option key={district} value={district}>
+                        📍 {district}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -592,7 +618,9 @@ function OwnerDashboard() {
               <EmptyState
                 icon={Car}
                 title="No Vehicles Listed"
-                description="You haven't added any vehicles to the marketplace yet. Click '+ List New Vehicle' above to start earning."
+                description="You haven't added any vehicles to the marketplace yet. Click '+ Add Vehicle' above to list a vehicle."
+                actionLabel="+ Add Vehicle"
+                onAction={() => setShowAddForm(true)}
               />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -652,24 +680,24 @@ function OwnerDashboard() {
 
                           <div className="flex items-center gap-1.5">
                             <button
+                              type="button"
                               onClick={() => handleOpenEditModal(vehicle)}
-                              title="Edit Vehicle Details & Image"
-                              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center gap-1 cursor-pointer"
+                              className="p-2 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition cursor-pointer"
+                              title="Edit Vehicle Details"
                             >
-                              <Edit3 size={13} />
-                              <span>Edit</span>
+                              <Edit3 size={15} />
                             </button>
                             <button
+                              type="button"
                               onClick={() => handleToggleDeactivate(vehicle)}
-                              title={isInactive ? "Reactivate Vehicle" : "Deactivate Vehicle (SRS 3.1.2.3)"}
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1 cursor-pointer ${
+                              className={`p-2 rounded-xl transition cursor-pointer ${
                                 isInactive
-                                  ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                                  : "bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                  ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                  : "bg-rose-50 text-rose-600 hover:bg-rose-100"
                               }`}
+                              title={isInactive ? "Reactivate Vehicle" : "Deactivate Vehicle"}
                             >
-                              {isInactive ? <Power size={13} /> : <PowerOff size={13} />}
-                              <span>{isInactive ? "Reactivate" : "Deactivate"}</span>
+                              {isInactive ? <Power size={15} /> : <PowerOff size={15} />}
                             </button>
                           </div>
                         </div>
@@ -760,28 +788,70 @@ function OwnerDashboard() {
                           <UserCheck size={13} /> Customer Info
                         </button>
                         {b.status === "pending" && (
-                          <button
-                            onClick={() => handleUpdateBookingStatus(b._id, "confirmed")}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
-                          >
-                            Accept &amp; Confirm
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleUpdateBookingStatus(b._id, "confirmed")}
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                            >
+                              Accept &amp; Confirm
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeclineBookingModal(b);
+                                setDeclineReason("Vehicle is currently undergoing maintenance / unavailable");
+                                setCustomReason("");
+                              }}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                            >
+                              Decline Request
+                            </button>
+                          </>
                         )}
                         {b.status === "confirmed" && (
-                          <button
-                            onClick={() => handleUpdateBookingStatus(b._id, "ongoing")}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
-                          >
-                            Handover Vehicle (Start Trip)
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleUpdateBookingStatus(b._id, "ongoing")}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                            >
+                              Handover Vehicle (Start Trip)
+                            </button>
+                            <button
+                              onClick={() => {
+                                setDeclineBookingModal(b);
+                                setDeclineReason("Vehicle emergency issue / cannot provide");
+                                setCustomReason("");
+                              }}
+                              className="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                            >
+                              Cancel &amp; Refund
+                            </button>
+                          </>
                         )}
                         {b.status === "ongoing" && (
                           <button
                             onClick={() => handleUpdateBookingStatus(b._id, "returned")}
                             className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
                           >
-                            Confirm Vehicle Return (SRS 3.1.3.9)
+                            Confirm Vehicle Return
                           </button>
+                        )}
+                        {b.status === "returned" && (
+                          <button
+                            onClick={() => handleUpdateBookingStatus(b._id, "completed")}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer"
+                          >
+                            ✅ Complete &amp; End Process
+                          </button>
+                        )}
+                        {b.status === "completed" && (
+                          <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                            ✨ Process Ended (Completed)
+                          </span>
+                        )}
+                        {b.status === "cancelled" && (
+                          <span className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg">
+                            ❌ Cancelled / Declined
+                          </span>
                         )}
                       </div>
                     </div>
@@ -836,14 +906,19 @@ function OwnerDashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">City *</label>
-                  <input
-                    type="text"
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Gujarat District / City *</label>
+                  <select
                     value={profileCity}
                     onChange={(e) => setProfileCity(e.target.value)}
                     required
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                  />
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white cursor-pointer font-medium"
+                  >
+                    {GUJARAT_DISTRICTS.map((district) => (
+                      <option key={district} value={district}>
+                        📍 {district}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -893,30 +968,16 @@ function OwnerDashboard() {
               </div>
 
               <form onSubmit={handleUpdateVehicle} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Brand / Make *</label>
-                    <input
-                      type="text"
-                      name="brand"
-                      value={editFormData.brand}
-                      onChange={handleEditInputChange}
-                      required
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Model *</label>
-                    <input
-                      type="text"
-                      name="model"
-                      value={editFormData.model}
-                      onChange={handleEditInputChange}
-                      required
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">Vehicle Name / Brand *</label>
+                  <input
+                    type="text"
+                    name="brand"
+                    value={editFormData.brand}
+                    onChange={handleEditInputChange}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white font-medium"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -952,15 +1013,20 @@ function OwnerDashboard() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">City *</label>
-                    <input
-                      type="text"
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">Gujarat District / City *</label>
+                    <select
                       name="city"
                       value={editFormData.city}
                       onChange={handleEditInputChange}
                       required
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white"
-                    />
+                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-indigo-600 focus:bg-white cursor-pointer font-medium"
+                    >
+                      {GUJARAT_DISTRICTS.map((district) => (
+                        <option key={district} value={district}>
+                          📍 {district}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -1200,6 +1266,104 @@ function OwnerDashboard() {
                   Close
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* DECLINE / CANCEL BOOKING MODAL */}
+        {declineBookingModal && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-100 relative my-8">
+              <button
+                onClick={() => setDeclineBookingModal(null)}
+                className="absolute top-5 right-5 p-2 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600">
+                  <AlertTriangle size={22} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Decline / Cancel Booking Request
+                  </h3>
+                  <p className="text-xs text-slate-500 font-mono">
+                    #{declineBookingModal.bookingid || declineBookingModal._id} · {declineBookingModal.vehicleId?.brand} {declineBookingModal.vehicleId?.model}
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 mb-4 leading-relaxed">
+                Please select or enter the reason for declining. The customer will receive an immediate notification and email with this message explaining why the vehicle cannot be provided.
+              </p>
+
+              <form onSubmit={handleDeclineBookingSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    Select Cancellation Reason *
+                  </label>
+                  <select
+                    value={declineReason}
+                    onChange={(e) => setDeclineReason(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:border-rose-500 focus:bg-white cursor-pointer"
+                  >
+                    <option value="Vehicle is currently undergoing maintenance / repairs">
+                      🔧 Vehicle is currently undergoing maintenance / repairs
+                    </option>
+                    <option value="Vehicle is temporarily unavailable / out of service">
+                      🚫 Vehicle is temporarily unavailable / out of service
+                    </option>
+                    <option value="Schedule conflict / vehicle already reserved locally">
+                      📅 Schedule conflict / vehicle already reserved locally
+                    </option>
+                    <option value="Vehicle sent for scheduled servicing & safety check">
+                      🛡️ Vehicle sent for scheduled servicing & safety check
+                    </option>
+                    <option value="Host unable to fulfill booking for selected location/dates">
+                      📍 Host unable to fulfill booking for selected location/dates
+                    </option>
+                    <option value="Other">
+                      ✍️ Other specific reason (Type below)
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    Additional Message / Specific Explanation for Customer
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={customReason}
+                    onChange={(e) => setCustomReason(e.target.value)}
+                    placeholder="e.g. The vehicle's brake pad replacement is scheduled on this date, so we cannot safely provide it."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-rose-500 focus:bg-white"
+                  />
+                </div>
+
+                <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 text-[11px] text-amber-800">
+                  <strong>Notice:</strong> If the customer has already paid, a 100% full refund will be immediately authorized since the cancellation was initiated by the host.
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeclineBookingModal(null)}
+                    className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                  >
+                    Keep Booking
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={declining}
+                    className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-xl shadow-xs transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5"
+                  >
+                    {declining ? "Sending Decline Notice..." : "Confirm & Decline"}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

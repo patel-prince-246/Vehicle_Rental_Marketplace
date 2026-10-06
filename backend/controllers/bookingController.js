@@ -517,6 +517,11 @@ const updateBookingStatus = async (req, res) => {
       });
     }
 
+    if (status === "cancelled") {
+      // Delegate to cancellation logic
+      return cancelBooking(req, res);
+    }
+
     booking.status = status;
     await booking.save();
 
@@ -614,7 +619,7 @@ const updateBookingStatus = async (req, res) => {
 };
 
 // ==============================
-// CANCEL BOOKING
+// CANCEL / DECLINE BOOKING
 // ==============================
 const cancelBooking = async (req, res) => {
   try {
@@ -656,26 +661,46 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    booking.status = "cancelled";
+    const cancellationReason =
+      req.body.cancellationReason?.trim() ||
+      (isOwner
+        ? "Vehicle is currently unavailable or undergoing maintenance."
+        : "Booking cancelled by customer.");
 
-    // SRS 3.1.3.4 & 3.1.4.2: Tiered Refund Policy on Cancellation
-    // Calculate time remaining until booking start date
+    const cancelledBy = isOwner
+      ? (vehicle?.ownerType || "owner")
+      : isAdmin
+      ? "admin"
+      : "customer";
+
+    booking.status = "cancelled";
+    booking.cancelledBy = cancelledBy;
+    booking.cancellationReason = cancellationReason;
+
+    // Refund Logic:
+    // If Host or Admin cancels/declines -> 100% Full Refund guaranteed to Customer
+    // If Customer cancels -> Tiered Refund policy based on lead time
+    let refundPercentage = 0;
+    let tierExplanation = "";
+
     const now = new Date();
     const startTime = new Date(booking.startDate);
     const hoursUntilStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-    let refundPercentage = 0;
-    let tierExplanation = "";
-
-    if (hoursUntilStart >= 24) {
+    if (cancelledBy === "owner" || cancelledBy === "agency" || cancelledBy === "admin") {
       refundPercentage = 100;
-      tierExplanation = "Full refund (100%) applied (cancelled 24+ hours before start).";
-    } else if (hoursUntilStart >= 12) {
-      refundPercentage = 50;
-      tierExplanation = "Partial refund (50%) applied (cancelled between 12-24 hours before start).";
+      tierExplanation = `Host / Admin cancelled: Full 100% refund applied to customer. Reason: "${cancellationReason}"`;
     } else {
-      refundPercentage = 0;
-      tierExplanation = "No refund (0%) applied (cancelled less than 12 hours before start).";
+      if (hoursUntilStart >= 24) {
+        refundPercentage = 100;
+        tierExplanation = "Full refund (100%) applied (cancelled 24+ hours before start).";
+      } else if (hoursUntilStart >= 12) {
+        refundPercentage = 50;
+        tierExplanation = "Partial refund (50%) applied (cancelled between 12-24 hours before start).";
+      } else {
+        refundPercentage = 0;
+        tierExplanation = "No refund (0%) applied (cancelled less than 12 hours before start).";
+      }
     }
 
     let calculatedRefund = 0;
@@ -711,13 +736,17 @@ const cancelBooking = async (req, res) => {
 
       // 1. Customer notification
       if (customer) {
+        const customerMsg = (cancelledBy === "owner" || cancelledBy === "agency")
+          ? `Your booking request #${booking.bookingid} for ${vehicle?.brand || "vehicle"} was declined by the host. Reason: "${cancellationReason}". ${calculatedRefund > 0 ? `Full Refund of ₹${calculatedRefund} processed.` : ""}`
+          : `Booking #${booking.bookingid} has been cancelled. ${tierExplanation} Refund Amount: ₹${calculatedRefund}`;
+
         await sendNotification({
           userId: customer._id,
           role: "customer",
           type: "booking_cancelled",
-          title: "Booking Cancelled",
-          message: `Booking #${booking.bookingid} has been cancelled. ${tierExplanation} Refund Amount: ₹${calculatedRefund}`,
-          link: "/customer/dashboard"
+          title: (cancelledBy === "owner" || cancelledBy === "agency") ? "Booking Request Declined by Host" : "Booking Cancelled",
+          message: customerMsg,
+          link: "/customer/dashboard?tab=bookings"
         });
 
         // Email
@@ -726,7 +755,7 @@ const cancelBooking = async (req, res) => {
           await sendBookingStatusUpdate(
             customer,
             booking,
-            `Your booking has been cancelled. ${tierExplanation} Refund Amount: ₹${calculatedRefund}`
+            customerMsg
           );
         } catch (eErr) {
           console.warn("Booking cancel email error:", eErr.message);
@@ -737,13 +766,17 @@ const cancelBooking = async (req, res) => {
       if (vehicle) {
         const owner = await getVehicleOwner(vehicle);
         if (owner && owner.userId) {
+          const hostMsg = (cancelledBy === "customer")
+            ? `Reservation #${booking.bookingid} for your ${vehicle.brand} ${vehicle.model} was cancelled by the customer.`
+            : `You declined/cancelled booking #${booking.bookingid} for ${vehicle.brand} ${vehicle.model}. Reason: "${cancellationReason}".`;
+
           await sendNotification({
             userId: owner.userId,
             role: vehicle.ownerType || "owner",
             type: "booking_cancelled",
-            title: "Booking Cancelled by Customer",
-            message: `Reservation #${booking.bookingid} for your ${vehicle.brand} ${vehicle.model} was cancelled by the customer.`,
-            link: vehicle.ownerType === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+            title: (cancelledBy === "customer") ? "Booking Cancelled by Customer" : "Booking Request Declined",
+            message: hostMsg,
+            link: vehicle.ownerType === "agency" ? "/agency/dashboard?tab=bookings" : "/owner/dashboard?tab=bookings"
           });
         }
       }
@@ -752,8 +785,8 @@ const cancelBooking = async (req, res) => {
       await sendRoleNotification("admin", {
         type: "booking_cancelled",
         title: "Booking Cancellation Notice",
-        message: `Booking #${booking.bookingid} was cancelled. Calculated refund: ₹${calculatedRefund}.`,
-        link: "/admin/dashboard"
+        message: `Booking #${booking.bookingid} was cancelled by ${cancelledBy}. Reason: ${cancellationReason}. Refund: ₹${calculatedRefund}.`,
+        link: "/admin/dashboard?tab=bookings"
       });
     } catch (nErr) {
       console.warn("Booking cancel notification error:", nErr.message);
@@ -761,7 +794,7 @@ const cancelBooking = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Booking cancelled successfully",
+      message: (cancelledBy === "owner" || cancelledBy === "agency") ? "Booking request declined with reason." : "Booking cancelled successfully",
       booking,
       refundDetails: {
         hoursUntilStart: Math.max(0, Math.round(hoursUntilStart * 10) / 10),

@@ -87,6 +87,18 @@ const bookingSchema = new mongoose.Schema(
     returnLocation: {
       type: String,
       trim: true
+    },
+
+    cancelledBy: {
+      type: String,
+      enum: ["customer", "owner", "agency", "admin", null],
+      default: null
+    },
+
+    cancellationReason: {
+      type: String,
+      trim: true,
+      default: ""
     }
   },
   {

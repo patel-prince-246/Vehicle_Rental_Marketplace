@@ -422,12 +422,33 @@ const rejectVehicle = async (req, res) => {
 // ==============================
 const getAllVehicles = async (req, res) => {
   try {
-    const vehicles = await Vehicle.find();
+    const vehicles = await Vehicle.find().sort({ createdAt: -1 });
+
+    const vehiclesWithOwners = await Promise.all(
+      vehicles.map(async (v) => {
+        let owner = null;
+        try {
+          if (v.ownerType === "agency") {
+            owner = await Agency.findById(v.ownerId).select("agencyName ownerName email phone city address");
+          } else if (v.ownerId) {
+            owner = await Owner.findById(v.ownerId).select("name email phone city address");
+          }
+        } catch (e) {
+          console.warn("Could not load owner for vehicle", v._id, e.message);
+        }
+
+        const vObj = v.toObject ? v.toObject() : { ...v };
+        return {
+          ...vObj,
+          owner
+        };
+      })
+    );
 
     res.status(200).json({
       success: true,
-      count: vehicles.length,
-      vehicles
+      count: vehiclesWithOwners.length,
+      vehicles: vehiclesWithOwners
     });
 
   } catch (error) {

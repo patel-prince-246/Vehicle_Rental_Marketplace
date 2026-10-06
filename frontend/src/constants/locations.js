@@ -1,0 +1,38 @@
+// Official 33 Districts of Gujarat, India
+export const GUJARAT_DISTRICTS = [
+  "Ahmedabad",
+  "Amreli",
+  "Anand",
+  "Aravalli",
+  "Banaskantha",
+  "Bharuch",
+  "Bhavnagar",
+  "Botad",
+  "Chhota Udaipur",
+  "Dahod",
+  "Dang",
+  "Devbhumi Dwarka",
+  "Gandhinagar",
+  "Gir Somnath",
+  "Jamnagar",
+  "Junagadh",
+  "Kheda (Nadiad)",
+  "Kutch (Bhuj)",
+  "Mahisagar",
+  "Mehsana",
+  "Morbi",
+  "Narmada",
+  "Navsari",
+  "Panchmahal (Godhra)",
+  "Patan",
+  "Porbandar",
+  "Rajkot",
+  "Sabarkantha (Himmatnagar)",
+  "Surat",
+  "Surendranagar",
+  "Tapi (Vyara)",
+  "Vadodara",
+  "Valsad"
+];
+
+export default GUJARAT_DISTRICTS;
