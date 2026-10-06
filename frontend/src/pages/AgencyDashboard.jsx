@@ -371,13 +371,28 @@ function AgencyDashboard() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {vehicles.map((v) => (
-              <div key={v._id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition">
-                <img
-                  src={v.imageUrl || "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80"}
-                  alt={`${v.brand} ${v.model}`}
-                  className="w-full h-48 object-cover"
-                />
+            {vehicles.map((v) => {
+              const getFallback = (t) => {
+                if (t === "Scooter") return "https://images.unsplash.com/photo-1591768575198-88dac53fbd0a?w=800&auto=format&fit=crop&q=80";
+                if (t === "Bike") return "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=800&auto=format&fit=crop&q=80";
+                if (t === "SUV") return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&auto=format&fit=crop&q=80";
+                return "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80";
+              };
+              const imgUrl = v.imageUrl
+                ? (v.imageUrl.startsWith("http") ? v.imageUrl : `http://localhost:5000${v.imageUrl.startsWith("/") ? "" : "/"}${v.imageUrl}`)
+                : getFallback(v.type);
+
+              return (
+                <div key={v._id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex flex-col hover:shadow-md transition">
+                  <img
+                    src={imgUrl}
+                    alt={`${v.brand} ${v.model}`}
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = getFallback(v.type);
+                    }}
+                    className="w-full h-48 object-cover"
+                  />
 
                 <div className="p-5 flex-1 flex flex-col justify-between">
                   <div>
@@ -411,9 +426,10 @@ function AgencyDashboard() {
                   </div>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
+      )}
       </div>
 
       <Footer />

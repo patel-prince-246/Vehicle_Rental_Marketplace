@@ -70,6 +70,16 @@ router.get(
 );
 
 router.put(
+  "/licenses/:id/verify",
+  verifyLicense
+);
+
+router.put(
+  "/licenses/:id/reject",
+  rejectLicense
+);
+
+router.put(
   "/users/:id/verify-license",
   verifyLicense
 );

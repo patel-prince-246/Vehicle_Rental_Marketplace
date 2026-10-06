@@ -1,10 +1,41 @@
 import { Link } from "react-router-dom";
-import { Search, ShieldCheck, CalendarCheck, CarFront, ArrowRight } from "lucide-react";
+import { Search, ShieldCheck, CalendarCheck, CarFront, ArrowRight, LayoutDashboard, Building2, Shield, User } from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
+import { useAuth } from "../context/AuthContext";
 
 
 function Home() {
+  const { user } = useAuth();
+
+  const getRoleDashboardLink = () => {
+    if (!user) return "/register";
+    switch (user.role) {
+      case "owner":
+        return "/owner/dashboard";
+      case "agency":
+        return "/agency/dashboard";
+      case "admin":
+        return "/admin/dashboard";
+      default:
+        return "/customer/dashboard";
+    }
+  };
+
+  const getRoleDashboardLabel = () => {
+    if (!user) return "List Your Vehicle";
+    switch (user.role) {
+      case "owner":
+        return "Host Fleet Dashboard";
+      case "agency":
+        return "Agency Fleet Portal";
+      case "admin":
+        return "Admin Control Panel";
+      default:
+        return "My Reservations Portal";
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-50">
       <Navbar />
@@ -14,12 +45,12 @@ function Home() {
         <section className="relative overflow-hidden bg-gradient-to-b from-white via-slate-50 to-slate-100 py-16 sm:py-24 px-4 sm:px-8 border-b border-slate-200">
           <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6 text-center lg:text-left">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-blue-50 border border-blue-200 text-blue-700">
-                ⭐ Trusted Car & Bike Rentals
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-50 border border-indigo-200 text-indigo-700">
+                {user ? `👋 Welcome Back, ${user.name} (${user.role.toUpperCase()})` : "⭐ Trusted Car & Bike Rentals"}
               </span>
 
               <h1 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight">
-                Find Your Perfect <span className="text-blue-600">Ride Today</span>
+                Find Your Perfect <span className="text-indigo-600">Ride Today</span>
               </h1>
 
               <p className="text-base sm:text-lg text-slate-600 max-w-xl mx-auto lg:mx-0 leading-relaxed">
@@ -29,17 +60,17 @@ function Home() {
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 pt-2">
                 <Link
                   to="/vehicles"
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/25 transition-all transform hover:-translate-y-0.5"
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/25 transition-all transform hover:-translate-y-0.5 cursor-pointer"
                 >
                   <Search size={18} />
                   <span>Explore Vehicles</span>
                 </Link>
 
                 <Link
-                  to="/register"
-                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all"
+                  to={getRoleDashboardLink()}
+                  className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-300 shadow-xs transition-all cursor-pointer"
                 >
-                  <span>List Your Vehicle</span>
+                  <span>{getRoleDashboardLabel()}</span>
                   <ArrowRight size={16} />
                 </Link>
               </div>

@@ -90,8 +90,31 @@ const paymentSchema = new mongoose.Schema(
 );
 
 paymentSchema.path("refundAmount").validate(function (value) {
-  return value <= this.amount;
+  return (value || 0) <= (this.amount || 0);
 }, "Refund amount cannot exceed payment amount");
 
-module.exports = mongoose.model("Payment", paymentSchema);
+// Safe cleanup for legacy paymentId index
+const Payment = mongoose.model("Payment", paymentSchema);
+
+if (mongoose.connection) {
+  const dropLegacyIndex = async () => {
+    try {
+      const collection = mongoose.connection.collection("payments");
+      const indexes = await collection.indexes();
+      if (indexes.some((idx) => idx.name === "paymentId_1")) {
+        await collection.dropIndex("paymentId_1");
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  if (mongoose.connection.readyState === 1) {
+    dropLegacyIndex();
+  } else {
+    mongoose.connection.once("connected", dropLegacyIndex);
+  }
+}
+
+module.exports = Payment;
 

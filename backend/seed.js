@@ -148,7 +148,7 @@ const seedDatabase = async () => {
         registrationNumber: "GJ07AC4554",
         status: "available",
         verificationStatus: "verified",
-        imageUrl: "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=800&auto=format&fit=crop&q=80",
+        imageUrl: "https://images.unsplash.com/photo-1591768575198-88dac53fbd0a?w=800&auto=format&fit=crop&q=80",
         description: "Smooth and fuel-efficient scooter, perfect for city commutes and errands."
       },
       {

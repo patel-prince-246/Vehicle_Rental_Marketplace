@@ -4,6 +4,7 @@ const {
   createBooking,
   getAllBookings,
   getMyBookings,
+  getOwnerBookings,
   getBookingById,
   updateBookingStatus,
   cancelBooking
@@ -24,12 +25,21 @@ router.post(
 );
 
 
-// My bookings
+// My bookings (customer)
 router.get(
   "/my",
   authMiddleware,
   roleMiddleware("customer"),
   getMyBookings
+);
+
+
+// Host / Agency incoming bookings
+router.get(
+  "/owner",
+  authMiddleware,
+  roleMiddleware("owner", "agency"),
+  getOwnerBookings
 );
 
 
@@ -74,7 +84,7 @@ router.put(
 );
 
 
-// Cancel booking
+// Cancel booking (supports both PATCH and PUT)
 router.patch(
   "/:id/cancel",
   authMiddleware,
@@ -87,5 +97,16 @@ router.patch(
   cancelBooking
 );
 
+router.put(
+  "/:id/cancel",
+  authMiddleware,
+  roleMiddleware(
+    "customer",
+    "owner",
+    "agency",
+    "admin"
+  ),
+  cancelBooking
+);
 
 module.exports = router;

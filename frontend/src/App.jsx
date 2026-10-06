@@ -26,12 +26,17 @@ function NotFound() {
 function App() {
   return (
     <Routes>
+      {/* Public Routes */}
       <Route path="/" element={<Home />} />
       <Route path="/vehicles" element={<Vehicles />} />
       <Route path="/vehicles/:id" element={<VehicleDetails />} />
-      <Route path="/booking/:id" element={<Booking />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+
+      {/* Authenticated Booking Route */}
+      <Route element={<ProtectedRoute />}>
+        <Route path="/booking/:id" element={<Booking />} />
+      </Route>
 
       {/* Customer Protected Route */}
       <Route element={<ProtectedRoute allowedRoles={["customer", "admin"]} />}>

@@ -8,13 +8,39 @@ const {
   getPaymentById,
   updatePaymentStatus,
   requestRefund,
-  processRefund
+  processRefund,
+  getRazorpayKey,
+  createRazorpayOrder,
+  verifyRazorpayPayment
 } = require("../controllers/paymentController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
 
-// Customer: create payment
+// Razorpay: get public key
+router.get(
+  "/razorpay-key",
+  authMiddleware,
+  getRazorpayKey
+);
+
+// Customer: create Razorpay order
+router.post(
+  "/create-razorpay-order",
+  authMiddleware,
+  roleMiddleware("customer"),
+  createRazorpayOrder
+);
+
+// Customer: verify Razorpay payment
+router.post(
+  "/verify-razorpay-payment",
+  authMiddleware,
+  roleMiddleware("customer"),
+  verifyRazorpayPayment
+);
+
+// Customer: create standard payment (cash/direct)
 router.post(
   "/",
   authMiddleware,

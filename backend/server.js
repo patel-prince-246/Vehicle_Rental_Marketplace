@@ -35,18 +35,16 @@ app.use(express.urlencoded({ extended: true }));
 // Serve uploaded files statically
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Rate limiting (skip in test environment)
-if (process.env.NODE_ENV !== "test") {
-  const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 200,
-    message: {
-      success: false,
-      message: "Too many requests. Please try again later.",
-    },
-  });
-  app.use(limiter);
-}
+// Rate limiting (generous threshold in dev for live notification polling & rapid testing)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10000,
+  message: {
+    success: false,
+    message: "Too many requests. Please try again later.",
+  },
+});
+app.use(limiter);
 
 // Root route
 app.get("/", (req, res) => {
@@ -66,6 +64,7 @@ app.use("/api/bookings", require("./routes/bookingRoutes"));
 app.use("/api/payments", require("./routes/paymentRoutes"));
 app.use("/api/reviews", require("./routes/reviewRoutes"));
 app.use("/api/notifications", require("./routes/notificationRoutes"));
+app.use("/api/disputes", require("./routes/disputeRoutes"));
 
 // 404 handler
 app.use(require("./middleware/errorMiddleware").notFound);

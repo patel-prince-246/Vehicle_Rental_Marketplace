@@ -430,13 +430,26 @@ const uploadDrivingLicense = async (req, res) => {
 
     await user.save();
 
-    // Create notification
+    // Role-based notifications
     try {
-      const Notification = require("../models/Notification");
-      await Notification.create({
+      const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
+      
+      // 1. Customer notification
+      await sendNotification({
         userId: user._id,
+        role: "customer",
         type: "license_submitted",
+        title: "License Submitted",
         message: "Your driving license has been uploaded and submitted for administrator review.",
+        link: "/customer/dashboard"
+      });
+
+      // 2. Admin notification
+      await sendRoleNotification("admin", {
+        type: "license_submitted",
+        title: "License Verification Pending",
+        message: `Customer ${user.name} submitted driving license (${user.license.licenseNumber || "File uploaded"}) for review.`,
+        link: "/admin/dashboard"
       });
     } catch (nErr) {
       console.warn("Notification creation error:", nErr.message);
@@ -457,9 +470,104 @@ const uploadDrivingLicense = async (req, res) => {
   }
 };
 
+// ==============================
+// UPDATE USER PROFILE (SRS 3.1.1.3)
+// ==============================
+const updateUserProfile = async (req, res) => {
+  try {
+    const { name, phone, city, address, avatar } = req.body;
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (name !== undefined) user.name = name.trim();
+    if (phone !== undefined) user.phone = phone.trim();
+    if (city !== undefined) user.city = city.trim();
+    if (address !== undefined) user.address = address.trim();
+    if (avatar !== undefined) user.avatar = avatar.trim();
+
+    // If file uploaded via multer for avatar
+    if (req.file) {
+      user.avatar = `/uploads/avatars/${req.file.filename}`;
+    }
+
+    await user.save();
+
+    // Also update linked Owner or Agency if present
+    if (user.role === "owner") {
+      await Owner.findOneAndUpdate(
+        { userId: user._id },
+        {
+          name: user.name,
+          phone: user.phone,
+          city: user.city,
+        }
+      );
+    } else if (user.role === "agency") {
+      await Agency.findOneAndUpdate(
+        { userId: user._id },
+        {
+          ownerName: user.name,
+          phone: user.phone,
+          city: user.city,
+          address: user.address || undefined,
+        }
+      );
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        city: user.city,
+        address: user.address,
+        avatar: user.avatar,
+        role: user.role,
+        license: user.license,
+      },
+    });
+  } catch (error) {
+    console.error("Update Profile Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+// ==============================
+// LOGOUT USER (SRS 3.1.1.4)
+// ==============================
+const logoutUser = async (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      message: "Signed out successfully",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Logout error",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   getUserProfile,
+  updateUserProfile,
   uploadDrivingLicense,
+  logoutUser,
 };

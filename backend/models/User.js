@@ -44,6 +44,17 @@ userid: {
       default: "customer"
     },
 
+    address: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    avatar: {
+      type: String,
+      default: ""
+    },
+
     license: {
       licenseNumber: {
         type: String,

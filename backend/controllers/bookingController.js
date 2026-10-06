@@ -5,6 +5,7 @@ const Vehicle = require("../models/Vehicle");
 const User = require("../models/User");
 const Owner = require("../models/Owner");
 const Agency = require("../models/Agency");
+const Payment = require("../models/Payment");
 
 // Find the vehicle owner using the lowercase ownerType values.
 const getVehicleOwner = async (vehicle) => {
@@ -98,10 +99,28 @@ const createBooking = async (req, res) => {
       });
     }
 
-    if (customer.license?.status === "rejected") {
+    // SRS 3.1.3.6 & 3.2.10: Check Consumer Details (License Verification Gate)
+    if (!customer.license || customer.license.status === "not_uploaded") {
       return res.status(400).json({
         success: false,
-        message: "Your driving license was rejected. Please contact support."
+        requiresLicense: true,
+        message: "A valid driving license is required to make a booking. Please upload your driving license first."
+      });
+    }
+
+    if (customer.license.status === "rejected") {
+      return res.status(400).json({
+        success: false,
+        requiresLicense: true,
+        message: "Your driving license was rejected by the administrator. Please upload a valid document to proceed."
+      });
+    }
+
+    if (customer.license.status !== "verified") {
+      return res.status(400).json({
+        success: false,
+        requiresLicense: true,
+        message: "Your driving license is currently pending administrator verification. You will be able to book vehicles once approved."
       });
     }
 
@@ -204,7 +223,7 @@ const createBooking = async (req, res) => {
       paymentStatus: "pending"
     });
 
-    // Send email confirmation
+    // Send email confirmation & in-app notifications
     try {
       const { sendBookingConfirmation } = require("../services/emailService");
       await sendBookingConfirmation(customer, booking, vehicle);
@@ -212,9 +231,50 @@ const createBooking = async (req, res) => {
       console.warn("Booking confirmation email error:", eErr.message);
     }
 
+    try {
+      const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
+
+      // 1. Customer notification
+      await sendNotification({
+        userId: customer._id,
+        role: "customer",
+        type: "booking_request",
+        title: "Booking Request Sent",
+        message: `Your booking request #${bookingid} for ${vehicle.brand} ${vehicle.model} was sent. Waiting for host confirmation.`,
+        link: `/customer/dashboard?tab=bookings&bookingId=${bookingid}`
+      });
+
+      // 2. Owner / Agency notification (Clicking directly opens the incoming booking)
+      const owner = await getVehicleOwner(vehicle);
+      if (owner && owner.userId) {
+        const ownerDashboardLink = vehicle.ownerType === "agency"
+          ? `/agency/dashboard?tab=bookings&bookingId=${bookingid}`
+          : `/owner/dashboard?tab=bookings&bookingId=${bookingid}`;
+
+        await sendNotification({
+          userId: owner.userId,
+          role: vehicle.ownerType || "owner",
+          type: "booking_request",
+          title: "New Booking Request",
+          message: `Customer ${customer.name} requested to book your ${vehicle.brand} ${vehicle.model} (#${bookingid}). Click to review and confirm.`,
+          link: ownerDashboardLink
+        });
+      }
+
+      // 3. Admin notification
+      await sendRoleNotification("admin", {
+        type: "booking_created",
+        title: "New Booking Request Placed",
+        message: `Customer ${customer.name} placed booking request #${bookingid} for ₹${totalAmount}.`,
+        link: `/admin/dashboard?tab=bookings&bookingId=${bookingid}`
+      });
+    } catch (nErr) {
+      console.warn("In-app notification creation error:", nErr.message);
+    }
+
     return res.status(201).json({
       success: true,
-      message: "Booking created successfully",
+      message: "Booking request created successfully. Waiting for owner confirmation.",
       booking
     });
   } catch (error) {
@@ -286,15 +346,23 @@ const getMyBookings = async (req, res) => {
 // ==============================
 const getOwnerBookings = async (req, res) => {
   try {
+    let ownerProfile = null;
+    if (req.user.role === "owner") {
+      ownerProfile = await Owner.findOne({ userId: req.user.id });
+    } else if (req.user.role === "agency") {
+      ownerProfile = await Agency.findOne({ userId: req.user.id });
+    }
+
+    if (!ownerProfile) {
+      return res.status(404).json({
+        success: false,
+        message: "Host profile not found"
+      });
+    }
+
     const vehicles = await Vehicle.find({
       ownerType: req.user.role,
-      ownerId: {
-        $in: await (async () => {
-          const Model = req.user.role === "owner" ? Owner : Agency;
-          const profile = await Model.findOne({ userId: req.user.id });
-          return profile ? [profile._id] : [];
-        })()
-      }
+      ownerId: ownerProfile._id
     }).select("_id");
 
     const vehicleIds = vehicles.map((vehicle) => vehicle._id);
@@ -434,10 +502,11 @@ const updateBookingStatus = async (req, res) => {
     }
 
     const transitions = {
-      pending: ["confirmed", "cancelled"],
+      pending: ["confirmed", "ongoing", "cancelled"],
       confirmed: ["ongoing", "cancelled"],
-      ongoing: ["returned"],
-      returned: [],
+      ongoing: ["returned", "completed"],
+      returned: ["completed"],
+      completed: [],
       cancelled: []
     };
 
@@ -448,38 +517,84 @@ const updateBookingStatus = async (req, res) => {
       });
     }
 
-    if (status === "ongoing" && booking.paymentStatus !== "paid") {
-      return res.status(400).json({
-        success: false,
-        message: "Booking must be paid before it can start"
-      });
-    }
-
-    if (status === "ongoing") {
-      const now = new Date();
-
-      if (now < booking.startDate || now >= booking.endDate) {
-        return res.status(400).json({
-          success: false,
-          message: "Booking is outside its scheduled rental period"
-        });
-      }
-    }
-
     booking.status = status;
     await booking.save();
 
     await refreshVehicleStatus(booking.vehicleId);
 
-    // Send email notification to customer
+    // Send role-based in-app & email notifications
     try {
+      const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
       const customer = await User.findById(booking.customerId);
+
+      if (status === "confirmed") {
+        // Host Approved -> Customer pays
+        if (customer) {
+          await sendNotification({
+            userId: customer._id,
+            role: "customer",
+            type: "booking_confirmed",
+            title: "Booking Approved! Please Pay",
+            message: `Host confirmed your booking for ${vehicle.brand} ${vehicle.model} (#${booking.bookingid}). Click to pay ₹${booking.totalAmount} to finalize.`,
+            link: `/customer/dashboard?tab=bookings&payBookingId=${booking._id}`
+          });
+        }
+        await sendNotification({
+          userId: req.user.id,
+          role: req.user.role,
+          type: "booking_confirmed",
+          title: "Booking Confirmed by You",
+          message: `You accepted booking #${booking.bookingid}. Waiting for customer payment / scheduled handover.`,
+          link: req.user.role === "agency" ? "/agency/dashboard?tab=bookings" : "/owner/dashboard?tab=bookings"
+        });
+      } else if (status === "ongoing") {
+        // Handover / Start Trip
+        if (customer) {
+          await sendNotification({
+            userId: customer._id,
+            role: "customer",
+            type: "booking",
+            title: "Vehicle Handed Over (Trip Started)",
+            message: `Your rental for ${vehicle.brand} ${vehicle.model} has officially started. Drive safely!`,
+            link: "/customer/dashboard?tab=bookings"
+          });
+        }
+        await sendNotification({
+          userId: req.user.id,
+          role: req.user.role,
+          type: "booking",
+          title: "Handover Complete",
+          message: `You have successfully handed over ${vehicle.brand} ${vehicle.model} to ${customer?.name || "the customer"}. Rental is now ongoing.`,
+          link: req.user.role === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+        });
+      } else if (status === "returned" || status === "completed") {
+        // Return / Complete Trip
+        if (customer) {
+          await sendNotification({
+            userId: customer._id,
+            role: "customer",
+            type: "booking",
+            title: "Rental Completed",
+            message: `Thank you for returning ${vehicle.brand} ${vehicle.model}! We hope you had a great journey. Please leave a review!`,
+            link: "/customer/dashboard"
+          });
+        }
+        await sendNotification({
+          userId: req.user.id,
+          role: req.user.role,
+          type: "booking",
+          title: "Vehicle Returned",
+          message: `${vehicle.brand} ${vehicle.model} has been marked as returned and is now available for new bookings.`,
+          link: req.user.role === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+        });
+      }
+
       if (customer) {
         const { sendBookingStatusUpdate } = require("../services/emailService");
         await sendBookingStatusUpdate(customer, booking, `Your booking status has been updated to "${status}".`);
       }
     } catch (eErr) {
-      console.warn("Booking status email error:", eErr.message);
+      console.warn("Booking status notification error:", eErr.message);
     }
 
     return res.status(200).json({
@@ -543,31 +658,117 @@ const cancelBooking = async (req, res) => {
 
     booking.status = "cancelled";
 
-    // Do not mark a refund as completed here.
-    // Refund processing is handled separately by paymentController.
-    await booking.save();
+    // SRS 3.1.3.4 & 3.1.4.2: Tiered Refund Policy on Cancellation
+    // Calculate time remaining until booking start date
+    const now = new Date();
+    const startTime = new Date(booking.startDate);
+    const hoursUntilStart = (startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
+    let refundPercentage = 0;
+    let tierExplanation = "";
+
+    if (hoursUntilStart >= 24) {
+      refundPercentage = 100;
+      tierExplanation = "Full refund (100%) applied (cancelled 24+ hours before start).";
+    } else if (hoursUntilStart >= 12) {
+      refundPercentage = 50;
+      tierExplanation = "Partial refund (50%) applied (cancelled between 12-24 hours before start).";
+    } else {
+      refundPercentage = 0;
+      tierExplanation = "No refund (0%) applied (cancelled less than 12 hours before start).";
+    }
+
+    let calculatedRefund = 0;
+    if (booking.paymentStatus === "paid") {
+      calculatedRefund = Math.round(((booking.totalAmount + (booking.securityDeposit || 0)) * refundPercentage) / 100);
+      booking.refundAmount = calculatedRefund;
+
+      // Update associated payment record
+      const payment = await Payment.findOne({
+        bookingId: booking._id,
+        status: "completed"
+      });
+
+      if (payment) {
+        payment.refundAmount = calculatedRefund;
+        payment.refundStatus = calculatedRefund > 0 ? "completed" : "not_requested";
+        payment.refundedAt = calculatedRefund > 0 ? new Date() : null;
+        if (calculatedRefund >= payment.amount) {
+          payment.status = "refunded";
+          booking.paymentStatus = "refunded";
+        }
+        await payment.save();
+      }
+    }
+
+    await booking.save();
     await refreshVehicleStatus(booking.vehicleId);
 
-    // Send email notification on cancellation
+    // Send notifications on cancellation
     try {
+      const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
       const customer = await User.findById(booking.customerId);
+
+      // 1. Customer notification
       if (customer) {
-        const { sendBookingStatusUpdate } = require("../services/emailService");
-        await sendBookingStatusUpdate(customer, booking, "Your booking has been cancelled.");
+        await sendNotification({
+          userId: customer._id,
+          role: "customer",
+          type: "booking_cancelled",
+          title: "Booking Cancelled",
+          message: `Booking #${booking.bookingid} has been cancelled. ${tierExplanation} Refund Amount: ₹${calculatedRefund}`,
+          link: "/customer/dashboard"
+        });
+
+        // Email
+        try {
+          const { sendBookingStatusUpdate } = require("../services/emailService");
+          await sendBookingStatusUpdate(
+            customer,
+            booking,
+            `Your booking has been cancelled. ${tierExplanation} Refund Amount: ₹${calculatedRefund}`
+          );
+        } catch (eErr) {
+          console.warn("Booking cancel email error:", eErr.message);
+        }
       }
-    } catch (eErr) {
-      console.warn("Booking cancel email error:", eErr.message);
+
+      // 2. Owner / Agency notification
+      if (vehicle) {
+        const owner = await getVehicleOwner(vehicle);
+        if (owner && owner.userId) {
+          await sendNotification({
+            userId: owner.userId,
+            role: vehicle.ownerType || "owner",
+            type: "booking_cancelled",
+            title: "Booking Cancelled by Customer",
+            message: `Reservation #${booking.bookingid} for your ${vehicle.brand} ${vehicle.model} was cancelled by the customer.`,
+            link: vehicle.ownerType === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+          });
+        }
+      }
+
+      // 3. Admin notification
+      await sendRoleNotification("admin", {
+        type: "booking_cancelled",
+        title: "Booking Cancellation Notice",
+        message: `Booking #${booking.bookingid} was cancelled. Calculated refund: ₹${calculatedRefund}.`,
+        link: "/admin/dashboard"
+      });
+    } catch (nErr) {
+      console.warn("Booking cancel notification error:", nErr.message);
     }
 
     return res.status(200).json({
       success: true,
       message: "Booking cancelled successfully",
       booking,
-      refundMessage:
-        booking.paymentStatus === "paid"
-          ? "Payment was already completed. Request a refund through the payment API."
-          : "No completed payment was found for this booking."
+      refundDetails: {
+        hoursUntilStart: Math.max(0, Math.round(hoursUntilStart * 10) / 10),
+        refundPercentage,
+        refundAmount: calculatedRefund,
+        explanation: tierExplanation,
+      }
     });
 
   } catch (error) {

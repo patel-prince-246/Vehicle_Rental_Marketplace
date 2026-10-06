@@ -65,6 +65,18 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const refreshProfile = async () => {
+    try {
+      const res = await api.get("/users/profile");
+      if (res.data?.success && res.data.user) {
+        setUser(res.data.user);
+        localStorage.setItem("user", JSON.stringify(res.data.user));
+      }
+    } catch (err) {
+      console.error("Failed to refresh profile:", err);
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setToken("");
@@ -82,6 +94,7 @@ export function AuthProvider({ children }) {
         login,
         register,
         logout,
+        refreshProfile,
       }}
     >
       {children}

@@ -32,16 +32,26 @@ router.get(
 );
 
 
-// Mark all as read
+// Mark all as read (supports PATCH and PUT)
 router.patch(
+  "/read-all",
+  authMiddleware,
+  markAllAsRead
+);
+router.put(
   "/read-all",
   authMiddleware,
   markAllAsRead
 );
 
 
-// Mark notification as read
+// Mark notification as read (supports PATCH and PUT)
 router.patch(
+  "/:id/read",
+  authMiddleware,
+  markAsRead
+);
+router.put(
   "/:id/read",
   authMiddleware,
   markAsRead

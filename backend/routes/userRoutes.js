@@ -4,11 +4,13 @@ const {
   registerUser,
   loginUser,
   getUserProfile,
-  uploadDrivingLicense
+  updateUserProfile,
+  uploadDrivingLicense,
+  logoutUser,
 } = require("../controllers/userController");
 
 const authMiddleware = require("../middleware/authMiddleware");
-const { uploadLicense } = require("../middleware/uploadMiddleware");
+const { uploadLicense, uploadAvatar } = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
 
@@ -18,8 +20,14 @@ router.post("/register", registerUser);
 // Login
 router.post("/login", loginUser);
 
+// Logout
+router.post("/logout", authMiddleware, logoutUser);
+
 // Get logged-in user profile
 router.get("/profile", authMiddleware, getUserProfile);
+
+// Update user profile (SRS 3.1.1.3)
+router.put("/profile", authMiddleware, uploadAvatar.single("avatar"), updateUserProfile);
 
 // Upload / update driving license (accepts multipart/form-data or json)
 router.post(

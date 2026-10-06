@@ -5,16 +5,36 @@ import StatusBadge from "../common/StatusBadge";
 function VehicleCard({ vehicle }) {
   if (!vehicle) return null;
 
-  const fallbackImage =
-    "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80";
+  const getFallbackImage = (vehicleType) => {
+    switch (vehicleType?.toLowerCase()) {
+      case "scooter":
+        return "https://images.unsplash.com/photo-1591768575198-88dac53fbd0a?w=800&auto=format&fit=crop&q=80";
+      case "bike":
+        return "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=800&auto=format&fit=crop&q=80";
+      case "suv":
+        return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&auto=format&fit=crop&q=80";
+      default:
+        return "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80";
+    }
+  };
+
+  const getImageUrl = (url, vehicleType) => {
+    if (!url) return getFallbackImage(vehicleType);
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return `http://localhost:5000${url.startsWith("/") ? "" : "/"}${url}`;
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition group flex flex-col justify-between">
       <div>
         <div className="relative overflow-hidden aspect-16/10 bg-slate-100">
           <img
-            src={vehicle.imageUrl || fallbackImage}
+            src={getImageUrl(vehicle.imageUrl, vehicle.type)}
             alt={`${vehicle.brand} ${vehicle.model}`}
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = getFallbackImage(vehicle.type);
+            }}
             className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
           />
           <div className="absolute top-3 right-3 flex flex-col gap-1.5 items-end">

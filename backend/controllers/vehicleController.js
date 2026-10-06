@@ -73,22 +73,22 @@ const createVehicle = async (req, res) => {
     } = req.body;
 
     if (
-      !vehicleid ||
       !brand ||
       !model ||
       !type ||
       pricePerDay === undefined ||
-      !city ||
-      year === undefined
+      pricePerDay === "" ||
+      !city
     ) {
       return res.status(400).json({
         success: false,
-        message: "All required vehicle fields must be provided"
+        message: "Brand, model, type, price per day, and city are required fields."
       });
     }
 
     const price = Number(pricePerDay);
-    const vehicleYear = Number(year);
+    const vehicleYear = year ? Number(year) : new Date().getFullYear();
+    const finalVehicleId = vehicleid && String(vehicleid).trim() ? String(vehicleid).trim() : ("VEH-" + Date.now().toString().slice(-6));
 
     if (!Number.isFinite(price) || price < 0) {
       return res.status(400).json({
@@ -135,7 +135,7 @@ const createVehicle = async (req, res) => {
     }
 
     const existingVehicle = await Vehicle.findOne({
-      vehicleid: vehicleid.trim()
+      vehicleid: finalVehicleId
     });
 
     if (existingVehicle) {
@@ -145,8 +145,13 @@ const createVehicle = async (req, res) => {
       });
     }
 
+    let finalImageUrl = imageUrl || "";
+    if (req.file) {
+      finalImageUrl = `/uploads/vehicles/${req.file.filename}`;
+    }
+
     const vehicle = await Vehicle.create({
-      vehicleid: vehicleid.trim(),
+      vehicleid: finalVehicleId,
       ownerType,
       ownerId: ownerProfile._id,
       brand,
@@ -156,11 +161,36 @@ const createVehicle = async (req, res) => {
       city,
       year: vehicleYear,
       registrationNumber,
-      imageUrl,
+      imageUrl: finalImageUrl,
       description,
       status: "available",
       verificationStatus: "pending"
     });
+
+    // Send role-based notifications
+    try {
+      const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
+      
+      // 1. Host notification
+      await sendNotification({
+        userId: req.user.id,
+        role: ownerType,
+        type: "vehicle_submitted",
+        title: "Vehicle Listing Submitted",
+        message: `Your vehicle ${brand} ${model} (${finalVehicleId}) has been listed and is pending administrator verification.`,
+        link: ownerType === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+      });
+
+      // 2. Admin notification
+      await sendRoleNotification("admin", {
+        type: "vehicle_submitted",
+        title: "New Vehicle Listing Pending",
+        message: `Host ${ownerProfile.name || ownerProfile.agencyName || "Host"} submitted a new ${type}: ${brand} ${model} in ${city}.`,
+        link: "/admin/dashboard"
+      });
+    } catch (nErr) {
+      console.warn("Vehicle creation notification error:", nErr.message);
+    }
 
     return res.status(201).json({
       success: true,
@@ -454,7 +484,9 @@ const updateVehicle = async (req, res) => {
       vehicle.registrationNumber = registrationNumber;
     }
 
-    if (imageUrl !== undefined) {
+    if (req.file) {
+      vehicle.imageUrl = `/uploads/vehicles/${req.file.filename}`;
+    } else if (imageUrl !== undefined) {
       vehicle.imageUrl = imageUrl;
     }
 
@@ -535,11 +567,14 @@ const deleteVehicle = async (req, res) => {
       });
     }
 
-    await Vehicle.findByIdAndDelete(vehicle._id);
+    // Soft-deactivate as required by SRS 3.1.2.3
+    vehicle.status = "inactive";
+    await vehicle.save();
 
     return res.status(200).json({
       success: true,
-      message: "Vehicle deleted successfully"
+      message: "Vehicle removed/deactivated successfully",
+      vehicle
     });
   } catch (error) {
     console.error("Delete Vehicle Error:", error);

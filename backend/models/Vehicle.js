@@ -75,7 +75,8 @@ const vehicleSchema = new mongoose.Schema(
         "available",
         "booked",
         "unavailable",
-        "maintenance"
+        "maintenance",
+        "inactive"
       ],
       default: "available"
     },

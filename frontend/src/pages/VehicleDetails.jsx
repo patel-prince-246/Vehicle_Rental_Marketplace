@@ -72,10 +72,27 @@ function VehicleDetails() {
 
   const vehicleName = `${vehicle.brand} ${vehicle.model}`;
   const price = vehicle.pricePerDay ?? vehicle.price ?? 0;
-  const image =
-    vehicle.imageUrl ||
-    vehicle.image ||
-    "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80";
+  
+  const getFallbackImage = (vehicleType) => {
+    switch (vehicleType?.toLowerCase()) {
+      case "scooter":
+        return "https://images.unsplash.com/photo-1591768575198-88dac53fbd0a?w=800&auto=format&fit=crop&q=80";
+      case "bike":
+        return "https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=800&auto=format&fit=crop&q=80";
+      case "suv":
+        return "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=800&auto=format&fit=crop&q=80";
+      default:
+        return "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?w=800&auto=format&fit=crop&q=80";
+    }
+  };
+
+  const getImageUrl = (url, vehicleType) => {
+    if (!url) return getFallbackImage(vehicleType);
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return `http://localhost:5000${url.startsWith("/") ? "" : "/"}${url}`;
+  };
+
+  const image = getImageUrl(vehicle.imageUrl || vehicle.image, vehicle.type);
   const ownerName = vehicle.owner?.name || vehicle.owner?.agencyName || "Prince (Verified Host)";
 
   return (
@@ -96,7 +113,15 @@ function VehicleDetails() {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-3xl border border-slate-200/90 overflow-hidden shadow-xs">
               <div className="h-80 sm:h-96 w-full bg-slate-900 relative">
-                <img src={image} alt={vehicleName} className="w-full h-full object-cover" />
+                <img
+                  src={image}
+                  alt={vehicleName}
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = getFallbackImage(vehicle.type);
+                  }}
+                  className="w-full h-full object-cover"
+                />
                 <span className="absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold uppercase bg-white/95 backdrop-blur text-slate-900 shadow-sm">
                   {vehicle.type}
                 </span>

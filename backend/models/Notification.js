@@ -5,25 +5,38 @@ const notificationSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true
+      required: true,
+      index: true
+    },
+
+    role: {
+      type: String,
+      enum: ["customer", "owner", "agency", "admin", "all"],
+      default: "customer"
     },
 
     type: {
       type: String,
-      enum: [
-        "booking",
-        "payment",
-        "vehicle",
-        "review",
-        "system"
-      ],
-      required: true
+      default: "system",
+      trim: true
+    },
+
+    title: {
+      type: String,
+      trim: true,
+      default: "Notification"
     },
 
     message: {
       type: String,
       required: true,
       trim: true
+    },
+
+    link: {
+      type: String,
+      trim: true,
+      default: ""
     },
 
     isRead: {

@@ -96,7 +96,8 @@ const bookingSchema = new mongoose.Schema(
 
 // Validate that the refund does not exceed the total
 bookingSchema.path("refundAmount").validate(function (value) {
-  return value <= this.totalAmount + this.securityDeposit;
+  const maxRefund = (Number(this.totalAmount) || 0) + (Number(this.securityDeposit) || 0);
+  return (Number(value) || 0) <= maxRefund;
 }, "Refund amount cannot exceed the total amount and security deposit");
 
 module.exports = mongoose.model("Booking", bookingSchema);

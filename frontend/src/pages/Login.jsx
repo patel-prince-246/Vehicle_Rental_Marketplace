@@ -27,7 +27,7 @@ function Login() {
     } else if (user.role === "agency") {
       navigate("/agency/dashboard");
     } else {
-      navigate("/vehicles");
+      navigate("/customer/dashboard");
     }
   };
 
@@ -131,29 +131,36 @@ function Login() {
         {/* Quick Demo Logins */}
         <div className="mt-6 pt-6 border-t border-slate-100">
           <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2.5 text-center">
-            Quick Demo Accounts
+            Instant Demo Logins
           </p>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <button
               type="button"
-              onClick={() => handleDemoLogin("tapan@admin.com", "tapan123")}
-              className="px-2 py-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              onClick={() => handleDemoLogin("dhruv@gmail.com", "dhruv123")}
+              className="px-2.5 py-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-xl text-xs font-bold transition cursor-pointer text-center"
             >
-              Admin
+              Customer
             </button>
             <button
               type="button"
               onClick={() => handleDemoLogin("prince@owner.com", "prince123")}
-              className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              className="px-2.5 py-2 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 rounded-xl text-xs font-bold transition cursor-pointer text-center"
             >
-              Owner
+              Host / Owner
             </button>
             <button
               type="button"
-              onClick={() => handleDemoLogin("dhruv@gmail.com", "dhruv123")}
-              className="px-2 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+              onClick={() => handleDemoLogin("agency@agency.com", "agency123")}
+              className="px-2.5 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold transition cursor-pointer text-center"
             >
-              Customer
+              Agency
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin("tapan@admin.com", "tapan123")}
+              className="px-2.5 py-2 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl text-xs font-bold transition cursor-pointer text-center"
+            >
+              Admin
             </button>
           </div>
         </div>

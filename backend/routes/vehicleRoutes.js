@@ -13,6 +13,7 @@ const {
 
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
+const { uploadVehicleImage } = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
 
@@ -42,6 +43,7 @@ router.post(
   "/",
   authMiddleware,
   roleMiddleware("owner", "agency"),
+  uploadVehicleImage.single("image"),
   createVehicle
 );
 
@@ -51,6 +53,7 @@ router.put(
   "/:id",
   authMiddleware,
   roleMiddleware("owner", "agency", "admin"),
+  uploadVehicleImage.single("image"),
   updateVehicle
 );
 

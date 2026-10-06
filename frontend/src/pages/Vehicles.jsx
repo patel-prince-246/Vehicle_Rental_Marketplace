@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { Search, SlidersHorizontal } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Search, SlidersHorizontal, Calendar, AlertTriangle, ShieldCheck, LayoutDashboard } from "lucide-react";
 import Navbar from "../components/common/Navbar";
 import Footer from "../components/common/Footer";
 import VehicleCard from "../components/cards/VehicleCard";
 import EmptyState from "../components/common/EmptyState";
+import { useAuth } from "../context/AuthContext";
 import api from "../services/api";
 
 function Vehicles() {
+  const { user } = useAuth();
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -76,14 +79,59 @@ function Vehicles() {
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
         {/* Header Title */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
-            Explore Available Fleet
-          </h1>
-          <p className="text-slate-600 mt-1 text-sm">
-            Find the right ride for your travel plans across Gujarat with live availability.
-          </p>
+        <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">
+              Explore Available Fleet
+            </h1>
+            <p className="text-slate-600 mt-1 text-sm">
+              Find the right ride for your travel plans across Gujarat with live availability.
+            </p>
+          </div>
+
+          {user?.role === "customer" && (
+            <Link
+              to="/customer/dashboard"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 text-xs font-bold transition shadow-xs self-start md:self-auto"
+            >
+              <LayoutDashboard size={16} className="text-indigo-400" />
+              Open Customer Dashboard
+            </Link>
+          )}
         </div>
+
+        {/* Customer Dashboard 3 Shortcut Buttons */}
+        {user?.role === "customer" && (
+          <div className="bg-white border border-indigo-100/80 rounded-2xl p-3.5 mb-8 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-slate-700 text-xs font-bold uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-indigo-600 animate-ping" />
+              Customer Dashboard:
+            </div>
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              <Link
+                to="/customer/dashboard?tab=bookings"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs font-bold text-slate-700 hover:text-indigo-700 transition"
+              >
+                <Calendar size={14} className="text-indigo-600" />
+                1. My Reservations
+              </Link>
+              <Link
+                to="/customer/dashboard?tab=disputes"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-rose-50 border border-slate-200 hover:border-rose-300 rounded-xl text-xs font-bold text-slate-700 hover:text-rose-700 transition"
+              >
+                <AlertTriangle size={14} className="text-rose-600" />
+                2. Disputes &amp; Claims
+              </Link>
+              <Link
+                to="/customer/dashboard?tab=profile"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-xl text-xs font-bold text-slate-700 hover:text-emerald-700 transition"
+              >
+                <ShieldCheck size={14} className="text-emerald-600" />
+                3. Profile &amp; License Settings
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Filters Bar */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-4 mb-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-center">

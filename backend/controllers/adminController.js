@@ -5,15 +5,17 @@ const Vehicle = require("../models/Vehicle");
 const Booking = require("../models/Booking");
 const Payment = require("../models/Payment");
 const Review = require("../models/Review");
+const Dispute = require("../models/Dispute");
 
 
 // ==============================
-// GET ALL USERS
+// GET ALL USERS (Excludes Admin users)
 // ==============================
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find()
-      .select("-password");
+    const users = await User.find({ role: { $ne: "admin" } })
+      .select("-password")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -306,8 +308,33 @@ const verifyVehicle = async (req, res) => {
     }
 
     vehicle.verificationStatus = "verified";
-
     await vehicle.save();
+
+    // Notify owner/agency
+    try {
+      const { sendNotification } = require("../utils/notificationService");
+      const Owner = require("../models/Owner");
+      const Agency = require("../models/Agency");
+      let ownerDoc = null;
+      if (vehicle.ownerType === "agency") {
+        ownerDoc = await Agency.findById(vehicle.ownerId);
+      } else {
+        ownerDoc = await Owner.findById(vehicle.ownerId);
+      }
+
+      if (ownerDoc && ownerDoc.userId) {
+        await sendNotification({
+          userId: ownerDoc.userId,
+          role: vehicle.ownerType || "owner",
+          type: "vehicle_verified",
+          title: "Vehicle Approved",
+          message: `Great news! Your vehicle ${vehicle.brand} ${vehicle.model} (${vehicle.vehicleid}) has been verified and approved by the admin.`,
+          link: vehicle.ownerType === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+        });
+      }
+    } catch (nErr) {
+      console.warn("Vehicle verify notification error:", nErr.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -344,8 +371,33 @@ const rejectVehicle = async (req, res) => {
     }
 
     vehicle.verificationStatus = "rejected";
-
     await vehicle.save();
+
+    // Notify owner/agency
+    try {
+      const { sendNotification } = require("../utils/notificationService");
+      const Owner = require("../models/Owner");
+      const Agency = require("../models/Agency");
+      let ownerDoc = null;
+      if (vehicle.ownerType === "agency") {
+        ownerDoc = await Agency.findById(vehicle.ownerId);
+      } else {
+        ownerDoc = await Owner.findById(vehicle.ownerId);
+      }
+
+      if (ownerDoc && ownerDoc.userId) {
+        await sendNotification({
+          userId: ownerDoc.userId,
+          role: vehicle.ownerType || "owner",
+          type: "vehicle_rejected",
+          title: "Vehicle Listing Rejected",
+          message: `Your vehicle listing ${vehicle.brand} ${vehicle.model} (${vehicle.vehicleid}) was rejected by admin. Please review vehicle specifications or documentation.`,
+          link: vehicle.ownerType === "agency" ? "/agency/dashboard" : "/owner/dashboard"
+        });
+      }
+    } catch (nErr) {
+      console.warn("Vehicle reject notification error:", nErr.message);
+    }
 
     res.status(200).json({
       success: true,
@@ -484,7 +536,8 @@ const getDashboardStats = async (req, res) => {
       totalVehicles,
       totalBookings,
       totalPayments,
-      totalReviews
+      totalReviews,
+      totalDisputes
     ] = await Promise.all([
       User.countDocuments(),
       Owner.countDocuments(),
@@ -492,7 +545,8 @@ const getDashboardStats = async (req, res) => {
       Vehicle.countDocuments(),
       Booking.countDocuments(),
       Payment.countDocuments(),
-      Review.countDocuments()
+      Review.countDocuments(),
+      Dispute.countDocuments()
     ]);
 
     res.status(200).json({
@@ -504,7 +558,8 @@ const getDashboardStats = async (req, res) => {
         totalVehicles,
         totalBookings,
         totalPayments,
-        totalReviews
+        totalReviews,
+        totalDisputes
       }
     });
 
@@ -567,13 +622,16 @@ const verifyLicense = async (req, res) => {
     user.license.status = "verified";
     await user.save();
 
-    // Create notification
+    // Create role-based notification
     try {
-      const Notification = require("../models/Notification");
-      await Notification.create({
+      const { sendNotification } = require("../utils/notificationService");
+      await sendNotification({
         userId: user._id,
+        role: "customer",
         type: "license_verified",
-        message: "Congratulations! Your driving license has been approved by the admin.",
+        title: "Driving License Approved",
+        message: "Congratulations! Your driving license has been approved by the admin. You can now reserve vehicles freely.",
+        link: "/customer/dashboard"
       });
     } catch (nErr) {
       console.warn("Notification error:", nErr.message);
@@ -620,13 +678,16 @@ const rejectLicense = async (req, res) => {
     user.license.status = "rejected";
     await user.save();
 
-    // Create notification
+    // Create role-based notification
     try {
-      const Notification = require("../models/Notification");
-      await Notification.create({
+      const { sendNotification } = require("../utils/notificationService");
+      await sendNotification({
         userId: user._id,
+        role: "customer",
         type: "license_rejected",
-        message: `Your driving license was rejected. Reason: ${reason || "Document details could not be validated."}`,
+        title: "Driving License Rejected",
+        message: `Your driving license was rejected by admin. Reason: ${reason || "Document details could not be validated."}`,
+        link: "/customer/dashboard"
       });
     } catch (nErr) {
       console.warn("Notification error:", nErr.message);
