@@ -337,6 +337,25 @@ function AgencyDashboard() {
     }
   };
 
+  // Agency confirms manual cash payment received from customer
+  const handleConfirmCashPayment = async (booking) => {
+    const custName = booking.customerId?.name || "Customer";
+    if (!window.confirm(`Confirm receipt of ₹${booking.totalAmount} in cash from ${custName} for booking #${booking.bookingid || booking._id}?\n\nThis will record the payment as complete and send email receipts to both your agency and the customer.`)) {
+      return;
+    }
+
+    try {
+      const res = await api.put(`/payments/${booking._id}/confirm-cash`);
+      if (res.data?.success) {
+        alert(`Cash payment of ₹${booking.totalAmount} confirmed successfully!`);
+        fetchIncomingBookings();
+        fetchFleetAndProfile();
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to confirm cash payment.");
+    }
+  };
+
   const [declineBookingModal, setDeclineBookingModal] = useState(null);
   const [declineReason, setDeclineReason] = useState("Vehicle is currently undergoing maintenance / unavailable");
   const [customReason, setCustomReason] = useState("");
@@ -905,6 +924,18 @@ function AgencyDashboard() {
                           >
                             <UserCheck size={13} /> Customer Details
                           </button>
+
+                          {b.paymentStatus === "pending" && b.status !== "cancelled" && (
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmCashPayment(b)}
+                              className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs rounded-xl shadow-xs transition cursor-pointer flex items-center gap-1"
+                              title="Confirm cash received from customer for this booking"
+                            >
+                              <span>💵</span>
+                              <span>Mark Cash Paid (₹{b.totalAmount})</span>
+                            </button>
+                          )}
 
                           {b.status === "pending" && (
                             <>
