@@ -154,6 +154,13 @@ const createPayment = async (req, res) => {
               message: `Customer ${userObj?.name || "Renter"} completed payment of ₹${paymentAmount} for booking #${booking.bookingid || booking._id}.`,
               link: vehicle.ownerType === "agency" ? "/agency/dashboard?tab=bookings" : "/owner/dashboard?tab=bookings"
             });
+
+            if (host.email) {
+              const { sendPaymentReceiptToHost } = require("../services/emailService");
+              await sendPaymentReceiptToHost(host, userObj, payment, booking, vehicle).catch((mailErr) =>
+                console.warn("Host mail receipt send error:", mailErr.message)
+              );
+            }
           }
         }
       } catch (eErr) {
@@ -796,6 +803,14 @@ const verifyRazorpayPayment = async (req, res) => {
             message: `Customer ${userObj?.name || "Renter"} paid ₹${booking.totalAmount} via Razorpay (Txn: ${razorpay_payment_id}) for #${booking.bookingid || booking._id}.`,
             link: vehicle.ownerType === "agency" ? "/agency/dashboard?tab=bookings" : "/owner/dashboard?tab=bookings"
           });
+
+          // Email receipt to Host as well (both sides receive confirmation)
+          if (host.email) {
+            const { sendPaymentReceiptToHost } = require("../services/emailService");
+            await sendPaymentReceiptToHost(host, userObj, payment, booking, vehicle).catch((err) =>
+              console.warn("Razorpay host receipt email error:", err.message)
+            );
+          }
         }
       }
     } catch (notifErr) {
@@ -818,6 +833,166 @@ const verifyRazorpayPayment = async (req, res) => {
   }
 };
 
+// ==============================
+// CONFIRM CASH PAYMENT (OWNER / AGENCY / ADMIN)
+// ==============================
+const confirmCashPayment = async (req, res) => {
+  try {
+    const bookingId = req.params.bookingId || req.body.bookingId;
+
+    if (!bookingId || !mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid booking ID is required",
+      });
+    }
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    if (booking.status === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot confirm cash payment for a cancelled booking",
+      });
+    }
+
+    const Vehicle = require("../models/Vehicle");
+    const vehicle = await Vehicle.findById(booking.vehicleId);
+    if (!vehicle) {
+      return res.status(404).json({
+        success: false,
+        message: "Associated vehicle not found",
+      });
+    }
+
+    // Check authorization: Must be the vehicle host or admin
+    const Owner = require("../models/Owner");
+    const Agency = require("../models/Agency");
+    let host = null;
+    if (vehicle.ownerType === "owner") {
+      host = await Owner.findById(vehicle.ownerId || vehicle.ownerid);
+    } else if (vehicle.ownerType === "agency") {
+      host = await Agency.findById(vehicle.ownerId || vehicle.ownerid);
+    }
+
+    const isAdmin = req.user.role === "admin";
+    const isOwner = host && host.userId && host.userId.toString() === req.user.id;
+
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to confirm payments for this vehicle",
+      });
+    }
+
+    if (booking.paymentStatus === "paid") {
+      return res.status(400).json({
+        success: false,
+        message: "This booking is already marked as paid",
+      });
+    }
+
+    // Find existing pending cash payment or create a new completed one
+    let payment = await Payment.findOne({
+      bookingId: booking._id,
+      status: { $in: ["pending", "completed"] },
+    });
+
+    const cashTxnId = `CASH-CONFIRMED-${Date.now().toString().slice(-6)}`;
+
+    if (payment) {
+      payment.paymentMethod = "cash";
+      payment.status = "completed";
+      payment.transactionId = cashTxnId;
+      payment.paidAt = new Date();
+      await payment.save();
+    } else {
+      payment = await Payment.create({
+        paymentid: `PAY-CASH-${Date.now().toString().slice(-6)}`,
+        bookingId: booking._id,
+        customerId: booking.customerId,
+        amount: booking.totalAmount,
+        paymentMethod: "cash",
+        transactionId: cashTxnId,
+        status: "completed",
+        paidAt: new Date(),
+        refundAmount: 0,
+        refundStatus: "not_requested",
+      });
+    }
+
+    // Update booking payment status
+    booking.paymentStatus = "paid";
+    await booking.save();
+
+    // Fetch customer details
+    const customer = await User.findById(booking.customerId);
+
+    // Send emails & in-app notifications
+    try {
+      const {
+        sendCashPaymentReceipt,
+        sendPaymentReceiptToHost,
+      } = require("../services/emailService");
+      const { sendNotification } = require("../utils/notificationService");
+
+      // 1. Email & in-app to Customer confirming cash payment
+      if (customer && customer.email) {
+        await sendCashPaymentReceipt(customer, host, payment, booking, vehicle).catch((err) =>
+          console.warn("Cash receipt email error:", err.message)
+        );
+
+        await sendNotification({
+          userId: customer._id,
+          role: "customer",
+          type: "payment_received",
+          title: "Cash Payment Confirmed",
+          message: `Host confirmed receipt of ₹${booking.totalAmount} in cash for booking #${booking.bookingid}. Your reservation is fully paid!`,
+          link: "/customer/dashboard?tab=bookings",
+        });
+      }
+
+      // 2. Email & in-app to Host confirming cash payment recorded
+      if (host && host.email) {
+        await sendPaymentReceiptToHost(host, customer, payment, booking, vehicle).catch((err) =>
+          console.warn("Host cash payment email error:", err.message)
+        );
+      }
+
+      await sendNotification({
+        userId: req.user.id,
+        role: req.user.role,
+        type: "payment_received",
+        title: "Cash Payment Recorded",
+        message: `You recorded ₹${booking.totalAmount} in cash received from ${customer?.name || "Customer"} for #${booking.bookingid}.`,
+        link: req.user.role === "agency" ? "/agency/dashboard?tab=bookings" : "/owner/dashboard?tab=bookings",
+      });
+    } catch (notifErr) {
+      console.warn("Cash payment notification error:", notifErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Cash payment of ₹${booking.totalAmount} confirmed successfully!`,
+      payment,
+      booking,
+    });
+  } catch (error) {
+    console.error("Confirm Cash Payment Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to confirm cash payment",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createPayment,
   getMyPayments,
@@ -828,5 +1003,6 @@ module.exports = {
   processRefund,
   getRazorpayKey,
   createRazorpayOrder,
-  verifyRazorpayPayment
+  verifyRazorpayPayment,
+  confirmCashPayment,
 };

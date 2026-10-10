@@ -66,13 +66,26 @@ const createBooking = async (req, res) => {
       endDate,
       pickupLocation,
       returnLocation,
-      securityDeposit
+      securityDeposit,
+      bookingType = "scheduled",
+      durationHours,
+      pickupCoordinates,
+      returnCoordinates
     } = req.body;
 
-    if (!bookingid || !vehicleId || !startDate || !endDate) {
+    const isInstant = bookingType === "instant";
+
+    if (!bookingid || !vehicleId) {
       return res.status(400).json({
         success: false,
-        message: "Booking ID, vehicle, start date and end date are required"
+        message: "Booking ID and vehicle ID are required"
+      });
+    }
+
+    if (!isInstant && (!startDate || !endDate)) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date and end date are required for scheduled bookings"
       });
     }
 
@@ -147,28 +160,46 @@ const createBooking = async (req, res) => {
       });
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    let start = startDate ? new Date(startDate) : new Date();
+    let end;
+    let totalAmount = 0;
+    const finalHours = isInstant ? Math.min(24, Math.max(1, Number(durationHours) || 4)) : undefined;
 
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid booking dates"
-      });
-    }
+    if (isInstant) {
+      // Instant booking under 24 hours based on nearby location
+      end = new Date(start.getTime() + finalHours * 60 * 60 * 1000);
+      const hourlyRate = (vehicle.pricePerDay || 600) / 24;
+      totalAmount = Math.max(150, Math.round(hourlyRate * finalHours));
+    } else {
+      end = new Date(endDate);
 
-    if (end <= start) {
-      return res.status(400).json({
-        success: false,
-        message: "End date must be after start date"
-      });
-    }
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid booking dates"
+        });
+      }
 
-    if (start < new Date()) {
-      return res.status(400).json({
-        success: false,
-        message: "Booking start date cannot be in the past"
-      });
+      if (end <= start) {
+        return res.status(400).json({
+          success: false,
+          message: "End date must be after start date"
+        });
+      }
+
+      // Allow 15 min leeway for current time
+      const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+      if (start < fifteenMinAgo) {
+        return res.status(400).json({
+          success: false,
+          message: "Booking start date cannot be in the past"
+        });
+      }
+
+      const days = Math.ceil(
+        (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      totalAmount = Math.max(vehicle.pricePerDay, days * vehicle.pricePerDay);
     }
 
     const overlappingBooking = await Booking.findOne({
@@ -181,15 +212,10 @@ const createBooking = async (req, res) => {
     if (overlappingBooking) {
       return res.status(409).json({
         success: false,
-        message: "Vehicle is already booked for the selected dates"
+        message: "Vehicle is already booked for the selected time window"
       });
     }
 
-    const days = Math.ceil(
-      (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)
-    );
-
-    const totalAmount = days * vehicle.pricePerDay;
     const deposit =
       securityDeposit === undefined ? 0 : Number(securityDeposit);
 
@@ -217,6 +243,8 @@ const createBooking = async (req, res) => {
       bookingid,
       customerId: req.user.id,
       vehicleId,
+      bookingType: isInstant ? "instant" : "scheduled",
+      durationHours: finalHours,
       startDate: start,
       endDate: end,
       totalAmount,
@@ -224,16 +252,29 @@ const createBooking = async (req, res) => {
       hostEarnings,
       platformFee,
       securityDeposit: deposit,
-      pickupLocation,
-      returnLocation,
+      pickupLocation: pickupLocation || vehicle.pickupLocationAddress || vehicle.city || "Pickup Station",
+      returnLocation: returnLocation || vehicle.returnLocationAddress || vehicle.city || "Drop Station",
+      pickupCoordinates: pickupCoordinates || {
+        latitude: vehicle.latitude || 21.1702,
+        longitude: vehicle.longitude || 72.8311
+      },
+      returnCoordinates: returnCoordinates || {
+        latitude: vehicle.latitude || 21.1702,
+        longitude: vehicle.longitude || 72.8311
+      },
       status: "pending",
       paymentStatus: "pending"
     });
 
-    // Send email confirmation & in-app notifications
+    // Send email confirmation to Customer & action request email to Host
     try {
-      const { sendBookingConfirmation } = require("../services/emailService");
+      const { sendBookingConfirmation, sendNewBookingRequestToHost } = require("../services/emailService");
       await sendBookingConfirmation(customer, booking, vehicle);
+
+      const owner = await getVehicleOwner(vehicle);
+      if (owner && owner.email) {
+        await sendNewBookingRequestToHost(owner, customer, booking, vehicle);
+      }
     } catch (eErr) {
       console.warn("Booking confirmation email error:", eErr.message);
     }
@@ -537,7 +578,7 @@ const updateBookingStatus = async (req, res) => {
     // Send role-based in-app & email notifications
     try {
       const { sendNotification, sendRoleNotification } = require("../utils/notificationService");
-      const customer = await User.findById(booking.customerId);
+      const host = await getVehicleOwner(vehicle);
 
       if (status === "confirmed") {
         // Host Approved -> Customer pays
@@ -550,6 +591,12 @@ const updateBookingStatus = async (req, res) => {
             message: `Host confirmed your booking for ${vehicle.brand} ${vehicle.model} (#${booking.bookingid}). Click to pay ₹${booking.totalAmount} to finalize.`,
             link: `/customer/dashboard?tab=bookings&payBookingId=${booking._id}`
           });
+
+          // Email customer that host accepted the reservation
+          const { sendBookingAcceptedToCustomer } = require("../services/emailService");
+          await sendBookingAcceptedToCustomer(customer, booking, vehicle, host).catch((err) =>
+            console.warn("Accepted email error:", err.message)
+          );
         }
         await sendNotification({
           userId: req.user.id,
@@ -560,7 +607,7 @@ const updateBookingStatus = async (req, res) => {
           link: req.user.role === "agency" ? "/agency/dashboard?tab=bookings" : "/owner/dashboard?tab=bookings"
         });
       } else if (status === "ongoing") {
-        // Handover / Start Trip
+        // Handover / Start Trip (Vehicle received by customer)
         if (customer) {
           await sendNotification({
             userId: customer._id,
@@ -570,6 +617,11 @@ const updateBookingStatus = async (req, res) => {
             message: `Your rental for ${vehicle.brand} ${vehicle.model} has officially started. Drive safely!`,
             link: "/customer/dashboard?tab=bookings"
           });
+
+          const { sendVehicleReceivedToCustomer } = require("../services/emailService");
+          await sendVehicleReceivedToCustomer(customer, host, booking, vehicle).catch((err) =>
+            console.warn("Customer vehicle received email error:", err.message)
+          );
         }
         await sendNotification({
           userId: req.user.id,
@@ -579,6 +631,14 @@ const updateBookingStatus = async (req, res) => {
           message: `You have successfully handed over ${vehicle.brand} ${vehicle.model} to ${customer?.name || "the customer"}. Rental is now ongoing.`,
           link: req.user.role === "agency" ? "/agency/dashboard" : "/owner/dashboard"
         });
+
+        // Email to Host confirming vehicle received by customer
+        if (host && host.email) {
+          const { sendVehicleHandoverToHost } = require("../services/emailService");
+          await sendVehicleHandoverToHost(host, customer, booking, vehicle).catch((err) =>
+            console.warn("Host vehicle handover email error:", err.message)
+          );
+        }
       } else if (status === "returned" || status === "completed") {
         // Return / Complete Trip
         if (customer) {
@@ -590,6 +650,12 @@ const updateBookingStatus = async (req, res) => {
             message: `Thank you for returning ${vehicle.brand} ${vehicle.model}! We hope you had a great journey. Please leave a review!`,
             link: "/customer/dashboard"
           });
+
+          // Email customer requesting review & feedback
+          const { sendReviewRequestEmail } = require("../services/emailService");
+          await sendReviewRequestEmail(customer, booking, vehicle).catch((err) =>
+            console.warn("Review request email error:", err.message)
+          );
         }
         await sendNotification({
           userId: req.user.id,
@@ -599,11 +665,6 @@ const updateBookingStatus = async (req, res) => {
           message: `${vehicle.brand} ${vehicle.model} has been marked as returned and is now available for new bookings.`,
           link: req.user.role === "agency" ? "/agency/dashboard" : "/owner/dashboard"
         });
-      }
-
-      if (customer) {
-        const { sendBookingStatusUpdate } = require("../services/emailService");
-        await sendBookingStatusUpdate(customer, booking, `Your booking status has been updated to "${status}".`);
       }
     } catch (eErr) {
       console.warn("Booking status notification error:", eErr.message);
@@ -756,14 +817,22 @@ const cancelBooking = async (req, res) => {
           link: "/customer/dashboard?tab=bookings"
         });
 
-        // Email
+        // Email customer
         try {
-          const { sendBookingStatusUpdate } = require("../services/emailService");
-          await sendBookingStatusUpdate(
-            customer,
-            booking,
-            customerMsg
-          );
+          const owner = vehicle ? await getVehicleOwner(vehicle) : null;
+          if (cancelledBy === "owner" || cancelledBy === "agency") {
+            const { sendBookingDeclinedToCustomer } = require("../services/emailService");
+            await sendBookingDeclinedToCustomer(
+              customer,
+              booking,
+              vehicle,
+              owner,
+              cancellationReason
+            );
+          } else {
+            const { sendBookingStatusUpdate } = require("../services/emailService");
+            await sendBookingStatusUpdate(customer, booking, customerMsg);
+          }
         } catch (eErr) {
           console.warn("Booking cancel email error:", eErr.message);
         }
@@ -822,6 +891,326 @@ const cancelBooking = async (req, res) => {
   }
 };
 
+// ==============================
+// 1. SEND HANDOVER OTP (To Customer Email)
+// Initiated by Owner / Agency when ready to give vehicle keys
+// ==============================
+const sendHandoverOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const booking = await Booking.findById(id).populate("customerId").populate("vehicleId");
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    const vehicle = booking.vehicleId;
+    const customer = booking.customerId;
+
+    const isAdmin = req.user.role === "admin";
+    const hasAccess = await hasVehicleAccess(vehicle, req.user);
+    if (!isAdmin && !hasAccess) {
+      return res.status(403).json({ success: false, message: "Unauthorized: only vehicle host can initiate handover" });
+    }
+
+    if (!["confirmed", "pending"].includes(booking.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot initiate handover for a booking with status '${booking.status}'. Status must be confirmed.`
+      });
+    }
+
+    // Generate secure 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+
+    booking.handoverOtp = {
+      code: otp,
+      expiresAt,
+      isVerified: false
+    };
+    await booking.save();
+
+    const host = await getVehicleOwner(vehicle);
+    const { sendHandoverOtpToCustomer, isSmtpConfigured } = require("../services/emailService");
+    await sendHandoverOtpToCustomer(customer, booking, vehicle, host, otp);
+
+    return res.status(200).json({
+      success: true,
+      message: `Handover OTP sent to customer (${customer.email}). Ask customer to share the code after inspecting vehicle keys.`,
+      customerEmail: customer.email,
+      devOtp: isSmtpConfigured() ? undefined : otp
+    });
+  } catch (error) {
+    console.error("Send Handover OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Server error sending handover OTP", error: error.message });
+  }
+};
+
+// ==============================
+// 2. VERIFY HANDOVER OTP
+// Entered by Host when customer provides code
+// ==============================
+const verifyHandoverOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({ success: false, message: "Handover OTP code is required" });
+    }
+
+    const booking = await Booking.findById(id).populate("customerId").populate("vehicleId");
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    const vehicle = booking.vehicleId;
+    const customer = booking.customerId;
+
+    const isAdmin = req.user.role === "admin";
+    const hasAccess = await hasVehicleAccess(vehicle, req.user);
+    if (!isAdmin && !hasAccess) {
+      return res.status(403).json({ success: false, message: "Unauthorized to verify handover for this booking" });
+    }
+
+    if (!booking.handoverOtp || !booking.handoverOtp.code) {
+      return res.status(400).json({
+        success: false,
+        message: "No handover OTP has been generated yet. Please click 'Send Handover OTP' first."
+      });
+    }
+
+    if (new Date() > new Date(booking.handoverOtp.expiresAt)) {
+      return res.status(400).json({
+        success: false,
+        message: "Handover OTP has expired. Please click 'Resend OTP' to send a fresh code."
+      });
+    }
+
+    if (String(booking.handoverOtp.code).trim() !== String(otp).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect Handover OTP. Please ask the customer to check their latest email or click Resend."
+      });
+    }
+
+    // Mark verified and update statuses
+    booking.handoverOtp.isVerified = true;
+    booking.handoverOtp.verifiedAt = new Date();
+    booking.status = "ongoing";
+    await booking.save();
+
+    await refreshVehicleStatus(vehicle._id || vehicle);
+
+    try {
+      const { sendNotification } = require("../utils/notificationService");
+      const { sendVehicleReceivedToCustomer } = require("../services/emailService");
+      const host = await getVehicleOwner(vehicle);
+
+      await sendNotification({
+        userId: customer._id,
+        role: "customer",
+        type: "booking",
+        title: "Vehicle Handover Confirmed! 🚗",
+        message: `Your rental for ${vehicle.brand} ${vehicle.model} has started. Have a safe journey!`,
+        link: "/customer/dashboard?tab=bookings"
+      });
+
+      await sendVehicleReceivedToCustomer(customer, host, booking, vehicle).catch(() => {});
+    } catch (nErr) {
+      console.warn("Handover notification error:", nErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Handover verified successfully! Vehicle handed over to customer. Status is now ONGOING.",
+      booking
+    });
+  } catch (error) {
+    console.error("Verify Handover OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Server error verifying handover OTP", error: error.message });
+  }
+};
+
+// ==============================
+// 3. SEND RETURN OTP & CHECK LATE PENALTY
+// Initiated by Host when vehicle is brought back
+// ==============================
+const sendReturnOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const booking = await Booking.findById(id).populate("customerId").populate("vehicleId");
+
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    const vehicle = booking.vehicleId;
+    const customer = booking.customerId;
+
+    const isAdmin = req.user.role === "admin";
+    const hasAccess = await hasVehicleAccess(vehicle, req.user);
+    if (!isAdmin && !hasAccess) {
+      return res.status(403).json({ success: false, message: "Unauthorized to process return for this vehicle" });
+    }
+
+    if (booking.status !== "ongoing") {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot initiate return for booking with status '${booking.status}'. Booking must be ongoing.`
+      });
+    }
+
+    // Check if return is late
+    const now = new Date();
+    const scheduledEnd = new Date(booking.endDate);
+    const isLate = now > scheduledEnd;
+    let lateHours = 0;
+    let penaltyAmount = 0;
+
+    if (isLate) {
+      const diffMs = now.getTime() - scheduledEnd.getTime();
+      lateHours = Math.ceil(diffMs / (1000 * 60 * 60));
+      // Hourly late penalty: ₹200/hr or 1.5x hourly rate
+      const hourlyRate = Math.round((vehicle.pricePerDay || 600) / 24);
+      penaltyAmount = Math.max(200 * lateHours, Math.round(hourlyRate * 1.5 * lateHours));
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    booking.returnOtp = {
+      code: otp,
+      expiresAt,
+      isVerified: false
+    };
+    booking.isLateReturn = isLate;
+    booking.lateHours = lateHours;
+    booking.penaltyAmount = penaltyAmount;
+    booking.penaltyReason = isLate ? `Late return by ${lateHours} hour(s)` : "";
+    await booking.save();
+
+    const host = await getVehicleOwner(vehicle);
+    const { sendReturnOtpToCustomer, isSmtpConfigured } = require("../services/emailService");
+    await sendReturnOtpToCustomer(customer, booking, vehicle, host, otp, {
+      isLate,
+      lateHours,
+      penaltyAmount
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Return OTP sent to customer (${customer.email}).${isLate ? ` ⚠️ Late return detected (${lateHours} hr late). Extra penalty: ₹${penaltyAmount}.` : " Returned on schedule."}`,
+      customerEmail: customer.email,
+      isLate,
+      lateHours,
+      penaltyAmount,
+      devOtp: isSmtpConfigured() ? undefined : otp
+    });
+  } catch (error) {
+    console.error("Send Return OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Server error sending return OTP", error: error.message });
+  }
+};
+
+// ==============================
+// 4. VERIFY RETURN OTP & CHARGE PENALTY
+// ==============================
+const verifyReturnOtp = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { otp } = req.body;
+
+    if (!otp) {
+      return res.status(400).json({ success: false, message: "Return OTP code is required" });
+    }
+
+    const booking = await Booking.findById(id).populate("customerId").populate("vehicleId");
+    if (!booking) {
+      return res.status(404).json({ success: false, message: "Booking not found" });
+    }
+
+    const vehicle = booking.vehicleId;
+    const customer = booking.customerId;
+
+    const isAdmin = req.user.role === "admin";
+    const hasAccess = await hasVehicleAccess(vehicle, req.user);
+    if (!isAdmin && !hasAccess) {
+      return res.status(403).json({ success: false, message: "Unauthorized to verify return for this vehicle" });
+    }
+
+    if (!booking.returnOtp || !booking.returnOtp.code) {
+      return res.status(400).json({
+        success: false,
+        message: "No return OTP generated yet. Please click 'Generate Return OTP' first."
+      });
+    }
+
+    if (new Date() > new Date(booking.returnOtp.expiresAt)) {
+      return res.status(400).json({
+        success: false,
+        message: "Return OTP has expired. Please click 'Resend OTP' to generate a new code."
+      });
+    }
+
+    if (String(booking.returnOtp.code).trim() !== String(otp).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Incorrect Return OTP. Please check the code with customer or resend."
+      });
+    }
+
+    const now = new Date();
+    booking.returnOtp.isVerified = true;
+    booking.returnOtp.verifiedAt = now;
+    booking.actualReturnDate = now;
+    booking.status = "returned";
+    await booking.save();
+
+    // Set vehicle back to available
+    vehicle.status = "available";
+    await vehicle.save();
+
+    try {
+      const { sendNotification } = require("../utils/notificationService");
+      const { sendReviewRequestEmail, sendLateReturnPenaltyNotice } = require("../services/emailService");
+
+      if (booking.isLateReturn && booking.penaltyAmount > 0) {
+        await sendLateReturnPenaltyNotice(customer, booking, vehicle, booking.penaltyAmount, booking.lateHours).catch(() => {});
+      }
+
+      await sendNotification({
+        userId: customer._id,
+        role: "customer",
+        type: "booking",
+        title: "Vehicle Returned Successfully! 🏁",
+        message: `Your return for ${vehicle.brand} ${vehicle.model} has been verified and completed.${booking.penaltyAmount > 0 ? ` Additional late penalty applied: ₹${booking.penaltyAmount}.` : ""}`,
+        link: "/customer/dashboard?tab=bookings"
+      });
+
+      await sendReviewRequestEmail(customer, booking, vehicle).catch(() => {});
+    } catch (nErr) {
+      console.warn("Return notification error:", nErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Return verified successfully! Vehicle returned.${booking.isLateReturn ? ` Late penalty charged: ₹${booking.penaltyAmount} (${booking.lateHours} hours late).` : ""}`,
+      booking,
+      penaltyDetails: {
+        isLate: booking.isLateReturn,
+        lateHours: booking.lateHours,
+        penaltyAmount: booking.penaltyAmount,
+        penaltyReason: booking.penaltyReason
+      }
+    });
+  } catch (error) {
+    console.error("Verify Return OTP Error:", error);
+    return res.status(500).json({ success: false, message: "Server error verifying return OTP", error: error.message });
+  }
+};
+
 module.exports = {
   createBooking,
   getAllBookings,
@@ -830,5 +1219,9 @@ module.exports = {
   getBookingById,
   updateBooking: updateBookingStatus,
   updateBookingStatus,
-  cancelBooking
+  cancelBooking,
+  sendHandoverOtp,
+  verifyHandoverOtp,
+  sendReturnOtp,
+  verifyReturnOtp
 };

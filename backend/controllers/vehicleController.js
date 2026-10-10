@@ -4,7 +4,34 @@ const Owner = require("../models/Owner");
 const Agency = require("../models/Agency");
 const Booking = require("../models/Booking");
 
-// Get owner or agency profile for a vehicle
+// Default Gujarat city coordinates [longitude, latitude]
+const CITY_COORDINATES = {
+  surat: [72.8311, 21.1702],
+  navsari: [72.9289, 20.9507],
+  vadodara: [73.1812, 22.3072],
+  ahmedabad: [72.5714, 23.0225],
+  nadiad: [72.8634, 22.6916],
+  kheda: [72.8634, 22.6916],
+  anand: [72.9289, 22.5645],
+  gandhinagar: [72.6369, 23.2156],
+  rajkot: [70.8022, 22.3039],
+  bharuch: [72.9959, 21.7051],
+  bhavnagar: [72.1519, 21.7645],
+  jamnagar: [70.0577, 22.4707],
+  junagadh: [70.4579, 21.5222],
+  valsad: [72.9289, 20.5992]
+};
+
+const getCoordsForCity = (cityName) => {
+  if (!cityName) return [72.8311, 21.1702];
+  const normalized = cityName.toLowerCase().trim();
+  for (const [key, coords] of Object.entries(CITY_COORDINATES)) {
+    if (normalized.includes(key)) return coords;
+  }
+  return [72.8311, 21.1702];
+};
+
+// Find the vehicle owner using the lowercase ownerType values.
 const getVehicleOwner = async (vehicle) => {
   const ownerType = vehicle.ownerType || "owner";
   const ownerId =
@@ -69,7 +96,11 @@ const createVehicle = async (req, res) => {
       year,
       registrationNumber,
       imageUrl,
-      description
+      description,
+      latitude,
+      longitude,
+      pickupLocationAddress,
+      returnLocationAddress
     } = req.body;
 
     if (
@@ -149,6 +180,11 @@ const createVehicle = async (req, res) => {
       finalImageUrl = `/uploads/vehicles/${req.file.filename}`;
     }
 
+    // Determine geographic coordinates [longitude, latitude]
+    const defaultCoords = getCoordsForCity(city);
+    const finalLng = longitude !== undefined && !isNaN(Number(longitude)) ? Number(longitude) : defaultCoords[0];
+    const finalLat = latitude !== undefined && !isNaN(Number(latitude)) ? Number(latitude) : defaultCoords[1];
+
     const vehicle = await Vehicle.create({
       vehicleid: finalVehicleId,
       ownerType,
@@ -162,6 +198,14 @@ const createVehicle = async (req, res) => {
       registrationNumber,
       imageUrl: finalImageUrl,
       description,
+      location: {
+        type: "Point",
+        coordinates: [finalLng, finalLat]
+      },
+      latitude: finalLat,
+      longitude: finalLng,
+      pickupLocationAddress: pickupLocationAddress || `${city}, Gujarat`,
+      returnLocationAddress: returnLocationAddress || `${city}, Gujarat`,
       status: "available",
       verificationStatus: "pending"
     });
@@ -806,9 +850,133 @@ const getDistinctLocations = async (req, res) => {
   }
 };
 
+// GET NEARBY VEHICLES (Spatial Query: GeoJSON 2dsphere $near with radius)
+const getNearbyVehicles = async (req, res) => {
+  try {
+    const { lat, lng, radius = 5, type, maxPrice } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({
+        success: false,
+        message: "Latitude (lat) and Longitude (lng) query parameters are required."
+      });
+    }
+
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+    const radiusKm = parseFloat(radius) || 5;
+    const maxDistanceMeters = radiusKm * 1000;
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid latitude or longitude coordinates."
+      });
+    }
+
+    const filter = {
+      status: "available"
+    };
+
+    if (req.query.verificationStatus) {
+      filter.verificationStatus = req.query.verificationStatus;
+    } else {
+      filter.$or = [
+        { verificationStatus: "verified" },
+        { verificationStatus: { $exists: false } }
+      ];
+    }
+
+    if (type && type !== "All") {
+      filter.type = type;
+    }
+
+    if (maxPrice) {
+      filter.pricePerDay = { $lte: Number(maxPrice) };
+    }
+
+    let vehicles = [];
+    try {
+      // Primary: High-speed MongoDB GeoJSON 2dsphere $near
+      const geoFilter = {
+        ...filter,
+        location: {
+          $near: {
+            $geometry: {
+              type: "Point",
+              coordinates: [longitude, latitude] // GeoJSON [lng, lat]
+            },
+            $maxDistance: maxDistanceMeters
+          }
+        }
+      };
+
+      vehicles = await Vehicle.find(geoFilter).limit(50);
+    } catch (geoErr) {
+      console.warn("Geospatial index fallback calculation:", geoErr.message);
+      // Fallback: Haversine distance matching
+      const allAvailable = await Vehicle.find(filter).limit(100);
+      const toRad = (val) => (val * Math.PI) / 180;
+
+      vehicles = allAvailable.filter((v) => {
+        const vLng = v.location?.coordinates?.[0] ?? v.longitude ?? getCoordsForCity(v.city)[0];
+        const vLat = v.location?.coordinates?.[1] ?? v.latitude ?? getCoordsForCity(v.city)[1];
+        const dLat = toRad(vLat - latitude);
+        const dLon = toRad(vLng - longitude);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(toRad(latitude)) * Math.cos(toRad(vLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distKm = 6371 * c;
+        return distKm <= radiusKm;
+      });
+    }
+
+    const toRad = (val) => (val * Math.PI) / 180;
+
+    const vehiclesWithOwners = await Promise.all(
+      vehicles.map(async (v) => {
+        const enriched = await addOwnerDetails(v);
+        const obj = enriched.toObject ? enriched.toObject() : { ...enriched };
+        const vLng = obj.location?.coordinates?.[0] ?? obj.longitude ?? getCoordsForCity(obj.city)[0];
+        const vLat = obj.location?.coordinates?.[1] ?? obj.latitude ?? getCoordsForCity(obj.city)[1];
+        if (vLat !== undefined && vLng !== undefined) {
+          const dLat = toRad(vLat - latitude);
+          const dLon = toRad(vLng - longitude);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(toRad(latitude)) * Math.cos(toRad(vLat)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          obj.distanceKm = Math.round(6371 * c * 10) / 10;
+        }
+        return obj;
+      })
+    );
+
+    // Sort closest first
+    vehiclesWithOwners.sort((a, b) => (a.distanceKm ?? 999) - (b.distanceKm ?? 999));
+
+    return res.status(200).json({
+      success: true,
+      count: vehiclesWithOwners.length,
+      radiusKm,
+      userLocation: { latitude, longitude },
+      vehicles: vehiclesWithOwners
+    });
+  } catch (error) {
+    console.error("Get Nearby Vehicles Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error searching nearby vehicles",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createVehicle,
   getAllVehicles,
+  getNearbyVehicles,
   getVehicleById,
   updateVehicle,
   deleteVehicle,

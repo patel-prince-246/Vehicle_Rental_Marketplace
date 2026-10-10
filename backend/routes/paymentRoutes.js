@@ -11,11 +11,27 @@ const {
   processRefund,
   getRazorpayKey,
   createRazorpayOrder,
-  verifyRazorpayPayment
+  verifyRazorpayPayment,
+  confirmCashPayment,
 } = require("../controllers/paymentController");
 
 const authMiddleware = require("../middleware/authMiddleware");
 const roleMiddleware = require("../middleware/roleMiddleware");
+
+// Host (Owner/Agency) & Admin: manually confirm cash payment received
+router.put(
+  "/:bookingId/confirm-cash",
+  authMiddleware,
+  roleMiddleware("owner", "agency", "admin"),
+  confirmCashPayment
+);
+
+router.post(
+  "/:bookingId/confirm-cash",
+  authMiddleware,
+  roleMiddleware("owner", "agency", "admin"),
+  confirmCashPayment
+);
 
 // Razorpay: get public key
 router.get(

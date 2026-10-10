@@ -3,6 +3,7 @@ const express = require("express");
 const {
   createVehicle,
   getAllVehicles,
+  getNearbyVehicles,
   getVehicleById,
   updateVehicle,
   deleteVehicle,
@@ -20,6 +21,9 @@ const router = express.Router();
 
 // Public active vehicle locations list
 router.get("/locations", getDistinctLocations);
+
+// Public nearby vehicle search (within radius km)
+router.get("/nearby", getNearbyVehicles);
 
 // Public vehicle search
 router.get("/", getAllVehicles);

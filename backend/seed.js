@@ -270,10 +270,69 @@ const seedDatabase = async () => {
         verificationStatus: "verified",
         imageUrl: "https://images.unsplash.com/photo-1527786356703-4b100091cd2c?w=800&auto=format&fit=crop&q=80",
         description: "Luxury executive group travel van with recliner seating, AC, and high-speed WiFi."
+      },
+      // Surat & Navsari Vehicles for Realtime Location & 5km Instant Booking
+      {
+        vehicleid: "GJ05ST2024",
+        ownerType: "owner",
+        ownerId: ownerProfile._id,
+        brand: "Maruti Suzuki",
+        model: "Swift ZXi",
+        type: "Car",
+        pricePerDay: 1400,
+        price: 1400,
+        city: "Surat",
+        year: 2024,
+        registrationNumber: "GJ05ST2024",
+        status: "available",
+        verificationStatus: "verified",
+        imageUrl: "https://images.unsplash.com/photo-1541899481282-d53bffe3c35d?w=800&auto=format&fit=crop&q=80",
+        description: "Agile hatchback, perfect for quick drives in Surat city and highway runs."
+      },
+      {
+        vehicleid: "GJ05NV1122",
+        ownerType: "agency",
+        ownerId: agencyProfile._id,
+        brand: "Tata",
+        model: "Nexon EV",
+        type: "SUV",
+        pricePerDay: 2200,
+        price: 2200,
+        city: "Navsari",
+        year: 2024,
+        registrationNumber: "GJ05NV1122",
+        status: "available",
+        verificationStatus: "verified",
+        imageUrl: "https://images.unsplash.com/photo-1511919884226-fd3cad34687c?w=800&auto=format&fit=crop&q=80",
+        description: "Electric SUV in Navsari with 400km range, zero emission and instant acceleration."
       }
     ];
 
-    const insertedVehicles = await Vehicle.insertMany(vehiclesData);
+    const CITY_COORDS = {
+      surat: [72.8311, 21.1702],
+      navsari: [72.9289, 20.9507],
+      vadodara: [73.1812, 22.3072],
+      ahmedabad: [72.5714, 23.0225],
+      nadiad: [72.8634, 22.6916]
+    };
+
+    const enrichedVehicles = vehiclesData.map((v) => {
+      const cityKey = (v.city || "").toLowerCase().trim();
+      const coords = CITY_COORDS[cityKey] || [72.8311, 21.1702];
+      return {
+        ...v,
+        location: {
+          type: "Point",
+          coordinates: coords
+        },
+        latitude: coords[1],
+        longitude: coords[0],
+        pickupLocationAddress: `${v.city}, Gujarat`,
+        returnLocationAddress: `${v.city}, Gujarat`
+      };
+    });
+
+    const insertedVehicles = await Vehicle.insertMany(enrichedVehicles);
     console.log(`Created ${insertedVehicles.length} vehicles.`);
 
     console.log("\n============================================");

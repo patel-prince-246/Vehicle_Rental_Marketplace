@@ -1,6 +1,7 @@
 const express = require("express");
 
 const {
+  sendRegistrationOtp,
   registerUser,
   loginUser,
   getUserProfile,
@@ -13,6 +14,10 @@ const authMiddleware = require("../middleware/authMiddleware");
 const { uploadLicense, uploadAvatar } = require("../middleware/uploadMiddleware");
 
 const router = express.Router();
+
+// Email OTP verification for Registration (Gmail SMTP)
+router.post("/send-registration-otp", sendRegistrationOtp);
+router.post("/send-otp", sendRegistrationOtp);
 
 // Register
 router.post("/register", registerUser);

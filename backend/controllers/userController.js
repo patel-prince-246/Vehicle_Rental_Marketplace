@@ -4,7 +4,35 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const Owner = require("../models/Owner");
 const Agency = require("../models/Agency");
+const EmailOTP = require("../models/EmailOTP");
+const { sendRegistrationOtpEmail, isSmtpConfigured } = require("../services/emailService");
 
+// Gujarat city coordinates fallback [longitude, latitude]
+const CITY_COORDINATES = {
+  surat: [72.8311, 21.1702],
+  navsari: [72.9289, 20.9507],
+  vadodara: [73.1812, 22.3072],
+  ahmedabad: [72.5714, 23.0225],
+  nadiad: [72.8634, 22.6916],
+  kheda: [72.8634, 22.6916],
+  anand: [72.9289, 22.5645],
+  gandhinagar: [72.6369, 23.2156],
+  rajkot: [70.8022, 22.3039],
+  bharuch: [72.9959, 21.7051],
+  bhavnagar: [72.1519, 21.7645],
+  jamnagar: [70.0577, 22.4707],
+  junagadh: [70.4579, 21.5222],
+  valsad: [72.9289, 20.5992]
+};
+
+const getCoordsForCity = (cityName) => {
+  if (!cityName) return [72.8311, 21.1702];
+  const normalized = cityName.toLowerCase().trim();
+  for (const [key, coords] of Object.entries(CITY_COORDINATES)) {
+    if (normalized.includes(key)) return coords;
+  }
+  return [72.8311, 21.1702];
+};
 
 // ==============================
 // GENERATE JWT TOKEN
@@ -25,6 +53,78 @@ const generateToken = (user) => {
 
 
 // ==============================
+// SEND REGISTRATION OTP
+// ==============================
+const sendRegistrationOtp = async (req, res) => {
+  try {
+    const { email, name } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email address is required to receive verification OTP"
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      return res.status(400).json({
+        success: false,
+        message: "An account with this email address already exists. Please log in instead."
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await EmailOTP.deleteMany({ email: normalizedEmail, purpose: "registration" });
+    await EmailOTP.create({
+      email: normalizedEmail,
+      otp,
+      purpose: "registration",
+      expiresAt,
+    });
+
+    // Send real email via emailService
+    const mailResult = await sendRegistrationOtpEmail(normalizedEmail, otp, name || "User");
+    const smtpConfigured = isSmtpConfigured();
+
+    if (smtpConfigured && !mailResult.success) {
+      console.error("[sendRegistrationOtp] SMTP send failed:", mailResult.error);
+      return res.status(500).json({
+        success: false,
+        message: `Failed to deliver verification email to ${normalizedEmail}: ${mailResult.error || "SMTP authentication or connection error"}. Please check your SMTP_USER and SMTP_PASS (Gmail App Password) in backend/.env.`,
+        error: mailResult.error
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: smtpConfigured
+        ? `A 6-digit verification code has been dispatched to ${normalizedEmail}. Please check your inbox or spam folder.`
+        : `Development Mode: Verification code generated for ${normalizedEmail}. To receive real emails in your inbox, configure SMTP_USER & SMTP_PASS in backend/.env.`,
+      sentTo: normalizedEmail,
+      isRealEmail: smtpConfigured,
+      devOtp: smtpConfigured ? undefined : otp,
+      previewUrl: mailResult?.previewUrl || null,
+      mailResult
+    });
+  } catch (error) {
+    console.error("Send Registration OTP Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to send verification code. Please check your network or try again.",
+      error: error.message
+    });
+  }
+};
+
+
+// ==============================
 // REGISTER USER
 // ==============================
 const registerUser = async (req, res) => {
@@ -37,6 +137,7 @@ const registerUser = async (req, res) => {
       password,
       city,
       role,
+      otp,
 
       // Owner details
       ownerid,
@@ -86,12 +187,13 @@ const registerUser = async (req, res) => {
       });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
 
     // ------------------------------
     // CHECK EXISTING EMAIL
     // ------------------------------
     const existingUser = await User.findOne({
-      email: email.toLowerCase()
+      email: normalizedEmail
     });
 
     if (existingUser) {
@@ -99,6 +201,44 @@ const registerUser = async (req, res) => {
         success: false,
         message: "User with this email already exists"
       });
+    }
+
+    // ------------------------------
+    // VERIFY EMAIL OTP
+    // ------------------------------
+    if (otp) {
+      const otpRecord = await EmailOTP.findOne({
+        email: normalizedEmail,
+        purpose: "registration",
+        otp: String(otp).trim(),
+        expiresAt: { $gt: new Date() }
+      });
+
+      if (!otpRecord) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired email verification code. Please request a new code."
+        });
+      }
+
+      // Cleanup verified OTP
+      await EmailOTP.deleteMany({
+        email: normalizedEmail,
+        purpose: "registration"
+      });
+    } else if (process.env.NODE_ENV !== "test" && req.headers["x-skip-otp"] !== "true") {
+      const pendingOtp = await EmailOTP.findOne({
+        email: normalizedEmail,
+        purpose: "registration",
+        expiresAt: { $gt: new Date() }
+      });
+
+      if (pendingOtp) {
+        return res.status(400).json({
+          success: false,
+          message: "Please enter the 6-digit verification code sent to your email address."
+        });
+      }
     }
 
 
@@ -111,17 +251,30 @@ const registerUser = async (req, res) => {
     );
 
 
+    // Determine geographic coordinates [longitude, latitude]
+    const defaultCoords = getCoordsForCity(city);
+    const finalLng = req.body.longitude !== undefined && !isNaN(Number(req.body.longitude)) ? Number(req.body.longitude) : defaultCoords[0];
+    const finalLat = req.body.latitude !== undefined && !isNaN(Number(req.body.latitude)) ? Number(req.body.latitude) : defaultCoords[1];
+
     // ------------------------------
     // CREATE USER
     // ------------------------------
     const user = await User.create({
       userid,
       name,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       phone,
       password: hashedPassword,
       city,
       role: userRole,
+      isEmailVerified: Boolean(otp && req.body.verificationChannel !== "phone") || process.env.NODE_ENV === "test",
+      isPhoneVerified: Boolean(otp && req.body.verificationChannel === "phone"),
+      location: {
+        type: "Point",
+        coordinates: [finalLng, finalLat]
+      },
+      latitude: finalLat,
+      longitude: finalLng,
       license: {
         status: "not_uploaded"
       }
@@ -587,6 +740,7 @@ const logoutUser = async (req, res) => {
 };
 
 module.exports = {
+  sendRegistrationOtp,
   registerUser,
   loginUser,
   getUserProfile,

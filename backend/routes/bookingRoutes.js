@@ -7,7 +7,11 @@ const {
   getOwnerBookings,
   getBookingById,
   updateBookingStatus,
-  cancelBooking
+  cancelBooking,
+  sendHandoverOtp,
+  verifyHandoverOtp,
+  sendReturnOtp,
+  verifyReturnOtp
 } = require("../controllers/bookingController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -119,6 +123,42 @@ router.put(
     "admin"
   ),
   cancelBooking
+);
+
+// -------------------------------------------------------------
+// OTP HANDOVER & RETURN VERIFICATION
+// -------------------------------------------------------------
+
+// 1. Send Handover OTP to customer email
+router.post(
+  "/:id/handover/send-otp",
+  authMiddleware,
+  roleMiddleware("owner", "agency", "admin"),
+  sendHandoverOtp
+);
+
+// 2. Verify Handover OTP entered by host
+router.post(
+  "/:id/handover/verify-otp",
+  authMiddleware,
+  roleMiddleware("owner", "agency", "admin"),
+  verifyHandoverOtp
+);
+
+// 3. Send Return OTP to customer email & evaluate late penalty
+router.post(
+  "/:id/return/send-otp",
+  authMiddleware,
+  roleMiddleware("owner", "agency", "admin"),
+  sendReturnOtp
+);
+
+// 4. Verify Return OTP entered by host & finalize return
+router.post(
+  "/:id/return/verify-otp",
+  authMiddleware,
+  roleMiddleware("owner", "agency", "admin"),
+  verifyReturnOtp
 );
 
 module.exports = router;

@@ -152,6 +152,24 @@ const createReview = async (req, res) => {
         message: `${reviewerName} submitted a ${rating}★ review for ${vehicle.brand} ${vehicle.model || ""}.`,
         link: "/admin/dashboard"
       });
+
+      // 4. Send Review Emails to Both Sides (Host & Customer)
+      const {
+        sendReviewNotificationToHost,
+        sendReviewConfirmationToCustomer
+      } = require("../services/emailService");
+
+      if (hostDoc && hostDoc.email) {
+        await sendReviewNotificationToHost(hostDoc, reviewer, review, vehicle, booking).catch((err) =>
+          console.warn("Review host email error:", err.message)
+        );
+      }
+
+      if (reviewer && reviewer.email) {
+        await sendReviewConfirmationToCustomer(reviewer, review, vehicle, booking).catch((err) =>
+          console.warn("Review customer email error:", err.message)
+        );
+      }
     } catch (nErr) {
       console.warn("Review notification error:", nErr.message);
     }

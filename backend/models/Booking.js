@@ -107,6 +107,68 @@ const bookingSchema = new mongoose.Schema(
       trim: true
     },
 
+    bookingType: {
+      type: String,
+      enum: ["instant", "scheduled"],
+      default: "scheduled"
+    },
+
+    durationHours: {
+      type: Number,
+      min: 1
+    },
+
+    pickupCoordinates: {
+      latitude: Number,
+      longitude: Number
+    },
+
+    returnCoordinates: {
+      latitude: Number,
+      longitude: Number
+    },
+
+    // Handover Verification OTP (sent to customer email, entered by owner/agency)
+    handoverOtp: {
+      code: { type: String, trim: true },
+      expiresAt: Date,
+      verifiedAt: Date,
+      isVerified: { type: Boolean, default: false }
+    },
+
+    // Return Verification OTP (sent to customer email, entered by owner/agency)
+    returnOtp: {
+      code: { type: String, trim: true },
+      expiresAt: Date,
+      verifiedAt: Date,
+      isVerified: { type: Boolean, default: false }
+    },
+
+    actualReturnDate: {
+      type: Date
+    },
+
+    isLateReturn: {
+      type: Boolean,
+      default: false
+    },
+
+    lateHours: {
+      type: Number,
+      default: 0
+    },
+
+    penaltyAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+
+    penaltyReason: {
+      type: String,
+      default: ""
+    },
+
     cancelledBy: {
       type: String,
       enum: ["customer", "owner", "agency", "admin", null],

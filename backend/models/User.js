@@ -23,25 +23,43 @@ userid: {
 
     phone: {
       type: String,
-      required: true,
-      trim: true
+      trim: true,
+      default: ""
     },
 
     password: {
       type: String,
-      required: true
+      required: function() {
+        return this.authProvider !== "google";
+      }
     },
 
     city: {
       type: String,
-      required: true,
-      trim: true
+      trim: true,
+      default: "Vadodara"
     },
 
     role: {
       type: String,
       enum: ["customer", "owner", "agency", "admin"],
       default: "customer"
+    },
+
+    googleId: {
+      type: String,
+      trim: true
+    },
+
+    authProvider: {
+      type: String,
+      enum: ["local", "google"],
+      default: "local"
+    },
+
+    isPhoneVerified: {
+      type: Boolean,
+      default: false
     },
 
     address: {
@@ -80,11 +98,40 @@ userid: {
     isActive: {
       type: Boolean,
       default: true
+    },
+
+    isEmailVerified: {
+      type: Boolean,
+      default: false
+    },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+        default: [72.8311, 21.1702]
+      }
+    },
+
+    latitude: {
+      type: Number,
+      default: 21.1702
+    },
+
+    longitude: {
+      type: Number,
+      default: 72.8311
     }
   },
   {
     timestamps: true
   }
 );
+
+userSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("User", userSchema);

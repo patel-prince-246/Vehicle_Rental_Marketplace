@@ -98,11 +98,49 @@ const vehicleSchema = new mongoose.Schema(
     description: {
       type: String,
       trim: true
+    },
+
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point"
+      },
+      // GeoJSON requires [longitude, latitude]
+      coordinates: {
+        type: [Number],
+        default: [72.8311, 21.1702] // Default Surat/Gujarat region
+      }
+    },
+
+    latitude: {
+      type: Number,
+      default: 21.1702
+    },
+
+    longitude: {
+      type: Number,
+      default: 72.8311
+    },
+
+    pickupLocationAddress: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+
+    returnLocationAddress: {
+      type: String,
+      trim: true,
+      default: ""
     }
   },
   {
     timestamps: true
   }
 );
+
+// Enable fast geospatial index for 5km / nearby queries
+vehicleSchema.index({ location: "2dsphere" });
 
 module.exports = mongoose.model("Vehicle", vehicleSchema);
